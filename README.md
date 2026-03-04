@@ -28,12 +28,12 @@
   "mcpServers": {
     "Compoid": {
       "url": "https://mcpv.compoid.com/mcp",
-    	"disabled": false,
-    	"transportType": "streamable-http",
+      "disabled": false,
+      "transportType": "streamable-http",
       "headers": {
         "X-Compoid-Repo-Key": "Repository-Compoid-Free-Subscription-API-Key"
       }
-		},
+    }
   }
 }
 ```
