@@ -1,0 +1,76 @@
+{
+  "servers": {
+    "sequential-thinking": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
+    "Compoid": {
+      "url": "https://mcps.compoid.com/Compoid/mcp",
+      "headers": {
+        "Authorization": "Remote-MCP-Compoid-Pro-Subscription-API-Key",
+        "X-Compoid-Repo-Key": "Repository-Compoid-Pro-Subscription-API-Key"
+      }
+    },
+    "memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ],
+      "env": {
+        "MEMORY_FILE_PATH": "~/workspace/.github/memory/memory.jsonl"
+      }
+    },
+    "ffmpeg": {
+      "url": "https://mcps.compoid.com/ffmpeg/mcp",
+      "headers": {
+        "Authorization": "Remote-MCP-Compoid-Pro-Subscription-API-Key"
+      }
+    },
+    "pyvisionai": {
+      "url": "https://mcps.compoid.com/pyvisionai/mcp",
+      "headers": {
+        "Authorization": "Remote-MCP-Compoid-Pro-Subscription-API-Key"
+      }
+    },
+    "multimedia": {
+      "url": "https://mcps.compoid.com/multimedia/mcp",
+      "headers": {
+        "Authorization": "Remote-MCP-Compoid-Pro-Subscription-API-Key"
+      }
+    },
+    "libreoffice": {
+      "url": "https://mcps.compoid.com/libreoffice/mcp",
+      "headers": {
+        "Authorization": "Remote-MCP-Compoid-Pro-Subscription-API-Key"
+      }
+    },
+    "remote-filesystem": {
+      "url": "https://mcps.compoid.com/remote-filesystem/mcp",
+      "headers": {
+        "Authorization": "Remote-MCP-Compoid-Pro-Subscription-API-Key"
+      }
+    },
+    "document-generator": {
+      "url": "https://mcps.compoid.com/document-generator/mcp",
+      "headers": {
+        "Authorization": "Remote-MCP-Compoid-Pro-Subscription-API-Key"
+      }
+    },
+    "powerpoint": {
+      "url": "https://mcps.compoid.com/powerpoint/mcp",
+      "headers": {
+        "Authorization": "Remote-MCP-Compoid-Pro-Subscription-API-Key"
+      }
+    },
+    "context7": {
+      "type": "http",
+      "url": "https://mcp.context7.com/mcp"
+    }
+  },
+  "inputs": []
+}

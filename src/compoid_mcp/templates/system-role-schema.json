@@ -1,0 +1,32 @@
+{
+ "name": "get_content_ratings",
+ "description": "Get the current content ratings from an image.",
+ "parameters": {
+  "type": "object",
+  "properties": {
+    "contentCategory": {
+     "type": "string",
+     "description": "The image content category",
+     "enum": ["{{ communityid }}"]
+    },
+   "contentRatings": {
+    "type": "array",
+    "description": "List of items within this section",
+    "items": {
+     "type": "object",
+     "properties": {
+      "itemName": {
+       "type": "string",
+       "description": "content raiting item name",
+       "enum": ["General", "Sensitive", "Questionable", "Explicit", "Educational", "Inspirational", "Informational", "Violence", "Entertaining", "Promotional"]
+      },
+      "value": {
+       "type": "integer",
+       "description": "content raiting value from 1 to 9"
+      }
+     }
+    }
+   }
+  }
+ }
+}

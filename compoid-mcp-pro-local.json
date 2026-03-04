@@ -1,0 +1,30 @@
+{
+  "mcpServers": {
+    "Compoid": {
+      "name": "Compoid AI Repository MCP Server",
+      "disabled": false,
+      "type": "stdio",
+      "command": "python",
+      "args": [
+        "-m",
+        "compoid_mcp.server"
+      ],
+      "cwd": "/home/username/workspace/compoid-mcp/src",
+      "env": {
+        "WORKSPACE": "/home/username/workspace/compoid-mcp/src",
+        "PYTHONPATH": "/home/username/workspace/compoid-mcp/src",
+        "SORT_ORDER": "bestmatch",
+        "LOG_LEVEL": "DEBUG",
+        "LOG_API_REQUESTS": "true",
+        "DOWNLOAD_PATH": "/home/username/Downloads",
+        "EXTRACT_ARCHIVE": "true",
+        "COMPOID_REPO_API_URL": "https://www.compoid.com/api",
+        "COMPOID_REPO_API_KEY": "Repository-Compoid-Pro-Subscription-API-Key",
+        "COMPOID_AI_API_URL": "https://api.compoid.com/v1",
+        "COMPOID_AI_API_KEY": "Remote-AI-Compoid-Pro-Subscription-API-Key",
+        "COMPOID_UPLOAD_URL": "https://mcps.compoid.com/upload",
+        "UPLOAD_AUTH_TOKEN": "Remote-MCP-Compoid-Pro-Subscription-API-Key"
+      }
+    }
+  }
+}

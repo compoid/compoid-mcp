@@ -1,0 +1,274 @@
+{
+    "access": {
+      "embargo": {
+        "active": false,
+        "reason": null
+      },
+      "files": "public",
+      "record": "public",
+      "status": "open"
+    },
+    "custom_fields": {
+      "rdm:classification": {
+        "id": "{{ content_class|lower }}",
+        "title": {
+          "en": "{{ content_class }}"
+        }
+      }
+    },
+    "files": {
+        "default_preview": "{{ image_name }}",
+        "enabled": true
+    },
+    "metadata": {
+        "title": "{{ short_caption }}",
+        "version": "{{ youtube_video_id }}",
+        "contributors": [
+          {%- for keyword in keywords %}
+          {
+            "person_or_org": {
+              "name": "{{ keyword }}",
+              "type": "organizational"
+            },
+            "role": {
+              "id": "keyword",
+              "title": {
+                "en": "Keyword"
+              }
+            }
+          },
+          {%- endfor %}
+          {
+            "person_or_org": {
+              "name": "{{ community_keywords }}",
+              "type": "organizational"
+            },
+            "role": {
+              "id": "keyword",
+              "title": {
+                "en": "Keyword"
+              }
+            }
+          }
+        ],
+        "subjects": [
+          {
+            "id": "https://www.compoid.com/index/subjects/Artificial_Intelligence",
+            "scheme": "Subjects",
+            "subject": "Artificial Intelligence"
+          },
+          {
+            "id": "https://www.compoid.com/index/subjects/Machine_Learning",
+            "scheme": "Subjects",
+            "subject": "Machine Learning"
+          },
+          {
+            "id": "https://www.compoid.com/index/subjects/Computer_Vision_and_Pattern_Recognition",
+            "scheme": "Subjects",
+            "subject": "Computer_Vision and Pattern Recognition"
+          },
+          {
+            "id": "https://www.compoid.com/index/subjects/Computation_and_Language",
+            "scheme": "Subjects",
+            "subject": "Computation and Language"
+          },
+          {
+            "id": "https://www.compoid.com/index/subjects/Neural_and_Evolutionary_Computing",
+            "scheme": "Subjects",
+            "subject": "Neural and Evolutionary Computing"
+          }
+        ],
+        "creators": [
+          {%- for creator in creators %}
+          {
+            "person_or_org": {
+              "family_name": "{{ creator }}",
+              "name": "{{ creator }}",
+              "type": "personal"
+            },
+            "role": {
+              "id": "creator",
+              "title": {
+                "en": "Creator"
+              }
+            }
+          },
+          {%- endfor %}
+          {
+            "person_or_org": {
+              "family_name": "Qwen",
+              "identifiers": [
+                {
+                  "identifier": "huggingface:Qwen",
+                  "scheme": "huggingface"
+                }
+              ],
+              "name": "Qwen",
+              "type": "personal"
+            },
+            "role": {
+              "id": "aimodel",
+              "title": {
+                "en": "AI Model"
+              }
+            }
+          }
+        ],
+        "publication_date": "{{ publication_date }}",
+        "dates": [
+            {
+                "date": "{{ update_date }}",
+                "type": {
+                    "id": "updated",
+                    "title": {
+                        "en": "Updated"
+                    }
+                }
+            }
+        ],
+        "resource_type": {
+            "title": {
+                "en": "{{ resourcetype }}"
+            },
+            "id": "{{ resource_type }}"
+        },
+        "description": "<p>{{ long_caption }}</p>",
+        "related_identifiers": [
+          {
+            "identifier": "https://huggingface.co/{{ short_alt_caption }}",
+            "relation_type": {
+              "id": "isdescribedby",
+              "title": {
+                "en": "Is described by"
+              }
+            },
+            "resource_type": {
+              "id": "vlm",
+              "title": {
+                "en": "VLM"
+              }
+            },
+            "scheme": "url"
+          }
+        ],
+        "rights": [
+            {
+              "id": "cc-by-sa-4.0"
+            }
+        ],
+        "additional_descriptions": [
+          {
+            "description": "<p><strong>title (short caption):</strong> Qwen;&nbsp; <strong>description (long caption):</strong> Qwen; <strong>comments:</strong> GLM</p>",
+            "type": {
+              "id": "table-of-contents",
+              "title": {
+                "en": "Table of contents"
+              }
+            }
+          }
+        ],
+        "additional_titles": [
+          {
+            "title": "0.{{ general_weights }}0000",
+            "type": {
+              "id": "general",
+              "title": {
+                "en": "General"
+              }
+            }
+          },
+          {
+            "title": "0.{{ sensitive_weights }}0000",
+            "type": {
+              "id": "sensitive",
+              "title": {
+                "en": "Sensitive"
+              }
+            }
+          },
+          {
+            "title": "0.{{ questionable_weights }}0000",
+            "type": {
+              "id": "questionable",
+              "title": {
+                "en": "Questionable"
+              }
+            }
+          },
+          {
+            "title": "0.{{ explicit_weights }}0000",
+            "type": {
+              "id": "explicit",
+              "title": {
+                "en": "Explicit"
+              }
+            }
+          },
+          {
+            "title": "0.{{ educational_weights }}0000",
+            "type": {
+              "id": "educational",
+              "title": {
+                "en": "Educational"
+              }
+            }
+          },
+          {
+            "title": "0.{{ inspirational_weights }}0000",
+            "type": {
+              "id": "inspirational",
+              "title": {
+                "en": "Inspirational"
+              }
+            }
+          },
+          {
+            "title": "0.{{ informational_weights }}0000",
+            "type": {
+              "id": "informational",
+              "title": {
+                "en": "Informational"
+              }
+            }
+          },
+          {
+            "title": "0.{{ violence_weights }}0000",
+            "type": {
+              "id": "violence",
+              "title": {
+                "en": "Violence"
+              }
+            }
+          },
+          {
+            "title": "0.{{ entertaining_weights }}0000",
+            "type": {
+              "id": "entertaining",
+              "title": {
+                "en": "Entertaining"
+              }
+            }
+          },
+          {
+            "title": "0.{{ promotional_weights }}0000",
+            "type": {
+              "id": "promotional",
+              "title": {
+                "en": "Promotional"
+              }
+            }
+          }
+        ],
+        "publisher": "Compoid",
+        "references": [
+          {%- for reference in references %}
+          {
+            "reference": "{{ reference }}"
+          },
+          {%- endfor %}
+          {
+            "reference": "{{ default_reference }}"
+          }
+        ]
+    }
+}

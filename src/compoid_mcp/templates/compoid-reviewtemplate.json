@@ -1,0 +1,6 @@
+{
+                "receiver": {
+                    "community": "{{ community }}"
+                  },
+                  "type": "community-submission"
+}

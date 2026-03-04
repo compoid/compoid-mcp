@@ -1,0 +1,33 @@
+{
+  "mcpServers": {
+    "Compoid": {
+      "name": "Compoid AI Repository MCP Server",
+      "disabled": false,
+      "type": "stdio",
+      "command": "python",
+      "args": [
+        "-m",
+        "compoid_mcp.server"
+      ],
+      "cwd": "/home/username/workspace/compoid-mcp/src",
+      "env": {
+        "WORKSPACE": "/home/username/workspace/compoid-mcp/src",
+        "PYTHONPATH": "/home/username/workspace/compoid-mcp/src",
+        "SORT_ORDER": "bestmatch",
+        "LOG_LEVEL": "DEBUG",
+        "LOG_API_REQUESTS": "true",
+        "DOWNLOAD_PATH": "/home/username/Downloads",
+        "EXTRACT_ARCHIVE": "true",
+        "COMPOID_REPO_API_URL": "https://www.compoid.com/api",
+        "COMPOID_REPO_API_KEY": "Repository-Compoid-Free-Subscription-API-Key",
+        "COMPOID_AI_API_URL": "https:///api.openai.com/v1",
+        "COMPOID_AI_API_KEY": "Your-Open-AI-Subscription-API-Key",
+        "COMPOID_UPLOAD_URL": "https://mcps.compoid.com/upload",
+        "UPLOAD_AUTH_TOKEN": "Remote-MCP-Compoid-Pro-Subscription-API-Key"
+      }
+    },
+  "_comment1": "COMPOID_AI_API_URL must be openai compatible server with multimodal capabilities",
+  "_comment2": "COMPOID_UPLOAD_URL is for bigger files, working with pro subscription, check REMOTE_FILE_UPLOAD_GUIDE.md",
+  "_comment3": "REMOTE_FILE_UPLOAD_GUIDE.md - with free subscription you can upload files using Data URI directly in `Compoid_create_record`"
+  }
+}
