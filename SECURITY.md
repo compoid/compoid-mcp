@@ -165,15 +165,14 @@ In case of a security incident:
 1. **Immediate**: Disable affected API keys
 2. **Assess**: Determine scope of impact
 3. **Contain**: Limit further damage
-4. **Notify**: Contact `security@compoid.com`
+4. **Notify**: Contact [Compoid Support](https://www.compoid.com/support)
 5. **Remediate**: Apply fixes
 6. **Review**: Post-incident analysis
 
 ## 📞 Contact
 
-- **Security Reports**: `security@compoid.com`
 - **General Questions**: [GitHub Discussions](https://github.com/compoid/compoid-mcp/discussions)
-- **Urgent Matters**: Contact maintainers directly
+- **Support**: [Compoid Support](https://www.compoid.com/support)
 
 ---
 
