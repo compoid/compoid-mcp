@@ -860,7 +860,7 @@ async def create_record(client: CompoidClient, arguments: Dict[str, Any]) -> Lis
                      f"MCP servers cannot access client-local files directly.\n"
                      f"The file must be uploaded to the server first using one of these methods:\n\n"
                      f"1. Convert to base64 (example.md as markdown mime type): \"file_upload\": \"data:text/markdown;base64,XXXX\",\n"
-                     f"2. Upload manually: curl -X POST https://mcps.compoid.com/upload --data-binary @{os.path.basename(file_upload)}\n"
+                     f"2. Upload manually: curl -X POST --header \"Authorization: Bearer UPLOAD_AUTH_TOKEN\" https://mcps.compoid.com/upload --data-binary @{os.path.basename(file_upload)}\n"
                      f"3. Use a server-side path (starts with /projects/)\n"
                      f"Then use the returned server path as the file_upload parameter."
             )]
@@ -965,7 +965,7 @@ async def update_record(client: CompoidClient, arguments: Dict[str, Any]) -> Lis
                          f"MCP servers cannot access client-local files directly.\n"
                          f"The file must be uploaded to the server first using one of these methods:\n\n"
                          f"1. Convert to base64 (example.md as markdown mime type): \"file_upload\": \"data:text/markdown;base64,XXXX\",\n"
-                         f"2. Upload manually: curl -X POST https://mcps.compoid.com/upload --data-binary @{os.path.basename(filter_file_upload)}\n"
+                         f"2. Upload manually: curl -X POST --header \"Authorization: Bearer UPLOAD_AUTH_TOKEN\" https://mcps.compoid.com/upload --data-binary @{os.path.basename(file_upload)}\n"
                          f"3. Use a server-side path (starts with /projects/)\n"
                          f"Then use the returned server path as the file_upload parameter."
                 )]

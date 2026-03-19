@@ -28,7 +28,7 @@ dev = [
     "python-dotenv>=1.2.1",
     "starlette>=0.50.0",
     "uvicorn>=0.40.0",
-    "jinja2>=3.16.0",
+    "jinja2>=3.1.6",
     
     # File Processing
     "PyPDF2>=3.0.0",
@@ -63,5 +63,5 @@ line-length = 88
 select = ["E", "F", "I", "N", "W"]
 
 [tool.mypy]
-python_version = "3.11
+python_version = "3.11"
 strict = true
