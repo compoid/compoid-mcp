@@ -7,6 +7,8 @@
 
 ## Features
 
+This Model Context Protocol (MCP) server provides a secure, remote interface for AI models to interact with Compoid repositories.
+
 - **Comprehensive Search**: Search across records and communities with advanced filters (title, description, keywords, dates, access status, resource types)
 - **Detailed Metadata**: Get complete information about records and communities including topics, creators, references, and file details
 - **File Management**: Download open-access records as zip archives and upload files via data URI
@@ -16,10 +18,44 @@
 - **Robust Error Handling**: Comprehensive error handling and logging for production use
 - **Async Support**: Full async/await support for high-performance concurrent requests
 
-
 ## 🚀 Quick Start
 
-### Option 1: Remote Server (Easiest - No Installation)
+### Option 1: Claude Code (CLI)
+
+If you are using the Claude Code terminal agent, run:
+
+```bash
+claude mcp add compoid --transport http https://mcpv.compoid.com/mcp --header "X-Compoid-Repo-Key: YOUR_API_KEY"
+```
+### Option 2: Cursor
+
+1. Open **Cursor Settings** → **Features** → **MCP**
+2. Click **+ Add New MCP Server**
+3. Use the following settings:
+
+| Setting | Value |
+|---------|-------|
+| **Name** | `Compoid` |
+| **Type** | `command` |
+| **URL** | `https://mcpv.compoid.com/mcp` |
+| **Headers** | `{"X-Compoid-Repo-Key": "YOUR_API_KEY"}` |
+
+---
+
+### Option 3: ChatGPT (Developer Mode)
+
+1. Go to **Settings** → **Apps & Connectors** → **Advanced**
+2. Toggle **Developer Mode** to **ON**
+3. Click **Create** under Connectors and enter:
+
+| Setting | Value |
+|---------|-------|
+| **Connector URL** | `https://mcpv.compoid.com/mcp` |
+| **Custom Header** | `X-Compoid-Repo-Key` |
+| **Value** | `YOUR_API_KEY` |
+
+## 🛠 Manual Configuration
+For Claude Desktop, add the following to your claude_desktop_config.json:
 
 ### Claude Desktop
 
@@ -28,10 +64,9 @@
   "mcpServers": {
     "Compoid": {
       "url": "https://mcpv.compoid.com/mcp",
-      "disabled": false,
       "transportType": "streamable-http",
       "headers": {
-        "X-Compoid-Repo-Key": "Repository-Compoid-Free-Subscription-API-Key"
+        "X-Compoid-Repo-Key": "YOUR_API_KEY"
       }
     }
   }
@@ -40,23 +75,24 @@
 
 ### VSCode Copilot
 
+For VSCode Copilot, add the following to your ~/.config/Code/User/mcp.json
 ```json
 {
   "servers": {
     "Compoid": {
       "url": "https://mcpv.compoid.com/mcp",
-      "disabled": false,
       "transportType": "streamable-http",
       "headers": {
-        "X-Compoid-Repo-Key": "Repository-Compoid-Free-Subscription-API-Key"
+        "X-Compoid-Repo-Key": "YOUR_API_KEY"
       }
     }
   },
   "inputs": []
 }
 ```
+Note: Replace YOUR_API_KEY with your actual Compoid Repository Key.
 
-### Option 2: Using pip installation
+### Option 4: Using local pip installation
 ```json
 {
   "mcpServers": {
@@ -90,82 +126,6 @@
   }
 }
 ```
-
-## Installation
-
-### Development Setup
-```bash
-cd /home/username/workspace
-git clone https://github.com/compoid/compoid-mcp.git
-cd /home/username/workspace/compoid-mcp
-pip install -e ".[dev]"
-
-#### VSCODE Agent setup
-mkdir -p /home/username/workspace/.github/
-cp /home/username/workspace/compoid-mcp/vscode-compoid-free-mcp.json /home/username/.config/Code/User/mcp.json
-cp /home/username/workspace/compoid-mcp/copilot-instructions.md /home/username/repos/.github/copilot-instructions.md
-
-```
-
-## Configuration
-
-### Environment Variables
-
-#### API & Authentication
-- `COMPOID_REPO_API_KEY` *(optional)* - API key for Compoid repository access
-- `COMPOID_AI_API_KEY` *(optional)* - API key for Compoid AI services
-- `UPLOAD_AUTH_TOKEN` *(optional)* - Bearer token for upload server authentication
-
-#### API Endpoints
-- `COMPOID_REPO_API_URL` *(default: "https://www.compoid.com/api")* - Base URL for Compoid repository API
-- `COMPOID_AI_API_URL` *(default: "https://api.compoid.com/v1")* - Base URL for Compoid AI API
-- `COMPOID_UPLOAD_URL` *(default: "https://mcps.compoid.com/upload")* - Base URL for file upload server
-
-#### AI Model Configuration
-- `COMPOID_AI_MODEL` *(default: "Qwen3.5-27B-FP8")* - AI model name for content analysis and generation
-
-#### Search & Results
-- `SORT_ORDER` *(optional)* - Default sort order for search results (e.g., "bestmatch", "newest", "oldest")
-- `COMPOID_DEFAULT_PAGE_SIZE` *(default: 25)* - Default number of results per page
-- `COMPOID_MAX_PAGE_SIZE` *(default: 200)* - Maximum allowed results per page
-
-#### Performance & Rate Limiting
-- `COMPOID_TIMEOUT` *(default: 30.0)* - Request timeout in seconds
-- `COMPOID_MAX_CONCURRENT` *(default: 10)* - Maximum concurrent API requests
-- `COMPOID_DAILY_LIMIT` *(default: 100000)* - Daily request limit
-
-#### File Handling
-- `DOWNLOAD_PATH` *(default: "~/Downloads")* - Default directory for downloaded files
-- `EXTRACT_ARCHIVE` *(default: false)* - Whether to automatically extract downloaded zip archives
-
-#### Logging & Debugging
-- `LOG_LEVEL` *(default: "INFO")* - Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-- `LOG_API_REQUESTS` *(default: false)* - Enable detailed API request logging for debugging
-
-### Example Configuration
-
-```bash
-# API Keys (if required)
-export COMPOID_REPO_API_KEY="your-repo-api-key"
-export COMPOID_AI_API_KEY="your-ai-api-key"
-
-# API Endpoints (use defaults if not set)
-export COMPOID_REPO_API_URL="https://www.compoid.com/api"
-export COMPOID_AI_API_URL="https://api.compoid.com/v1"
-
-# AI Model
-export COMPOID_AI_MODEL="Qwen3.5-27B-FP8"
-
-# Search & Performance
-export SORT_ORDER="bestmatch"
-export COMPOID_TIMEOUT="30.0"
-export COMPOID_MAX_CONCURRENT="10"
-
-# Logging
-export LOG_LEVEL="DEBUG"
-export LOG_API_REQUESTS="true"
-```
-
 # Compoid MCP Server - Available Functions
 
 ## Overview
@@ -379,39 +339,6 @@ Update an existing community on Compoid
 
 **Note:** Only provided fields are updated. Existing values are preserved for fields not specified.
 
----
-
-## Development
-
-### Setup Development Environment
-
-#### With pip
-```bash
-git clone https://github.com/compoid/compoid-mcp.git
-cd compoid-mcp
-pip install -e ".[dev]"
-```
-
-#### With pip/build
-```bash
-# Build source distribution and wheel
-python -m build
-
-# This creates:
-# - dist/compoid_mcp-1.0.0.tar.gz
-# - dist/compoid_mcp-1.0.0-py3-none-any.whl
-```
-
-#### Package Contents Verification
-```bash
-# Check source distribution contents
-tar -tzf dist/compoid_mcp-1.0.0.tar.gz
-
-# Check wheel contents  
-unzip -l dist/compoid_mcp-1.0.0-py3-none-any.whl
-```
-For detailed packaging instructions, see [PACKAGING.md](PACKAGING.md).
-
 # MCP Functions Inventory
 
 ### Search & Discovery
@@ -447,6 +374,113 @@ For detailed packaging instructions, see [PACKAGING.md](PACKAGING.md).
 
 ---
 
+## Local Installation
+
+### Development Setup
+```bash
+cd /home/username/workspace
+git clone https://github.com/compoid/compoid-mcp.git
+cd /home/username/workspace/compoid-mcp
+pip install -e ".[dev]"
+
+#### VSCODE Agent setup
+mkdir -p /home/username/workspace/.github/
+cp /home/username/workspace/compoid-mcp/vscode-compoid-free-mcp.json /home/username/.config/Code/User/mcp.json
+cp /home/username/workspace/compoid-mcp/copilot-instructions.md /home/username/repos/.github/copilot-instructions.md
+
+```
+
+## Configuration
+
+### Environment Variables
+
+#### API & Authentication
+- `COMPOID_REPO_API_KEY` *(optional)* - API key for Compoid repository access
+- `COMPOID_AI_API_KEY` *(optional)* - API key for Compoid AI services
+- `UPLOAD_AUTH_TOKEN` *(optional)* - Bearer token for upload server authentication
+
+#### API Endpoints
+- `COMPOID_REPO_API_URL` *(default: "https://www.compoid.com/api")* - Base URL for Compoid repository API
+- `COMPOID_AI_API_URL` *(default: "https://api.compoid.com/v1")* - Base URL for Compoid AI API
+- `COMPOID_UPLOAD_URL` *(default: "https://mcps.compoid.com/upload")* - Base URL for file upload server
+
+#### AI Model Configuration
+- `COMPOID_AI_MODEL` *(default: "Qwen3.5-27B-FP8")* - AI model name for content analysis and generation
+
+#### Search & Results
+- `SORT_ORDER` *(optional)* - Default sort order for search results (e.g., "bestmatch", "newest", "oldest")
+- `COMPOID_DEFAULT_PAGE_SIZE` *(default: 25)* - Default number of results per page
+- `COMPOID_MAX_PAGE_SIZE` *(default: 200)* - Maximum allowed results per page
+
+#### Performance & Rate Limiting
+- `COMPOID_TIMEOUT` *(default: 30.0)* - Request timeout in seconds
+- `COMPOID_MAX_CONCURRENT` *(default: 10)* - Maximum concurrent API requests
+- `COMPOID_DAILY_LIMIT` *(default: 100000)* - Daily request limit
+
+#### File Handling
+- `DOWNLOAD_PATH` *(default: "~/Downloads")* - Default directory for downloaded files
+- `EXTRACT_ARCHIVE` *(default: false)* - Whether to automatically extract downloaded zip archives
+
+#### Logging & Debugging
+- `LOG_LEVEL` *(default: "INFO")* - Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+- `LOG_API_REQUESTS` *(default: false)* - Enable detailed API request logging for debugging
+
+### Example Configuration
+
+```bash
+# API Keys (if required)
+export COMPOID_REPO_API_KEY="your-repo-api-key"
+export COMPOID_AI_API_KEY="your-ai-api-key"
+
+# API Endpoints (use defaults if not set)
+export COMPOID_REPO_API_URL="https://www.compoid.com/api"
+export COMPOID_AI_API_URL="https://api.compoid.com/v1"
+
+# AI Model
+export COMPOID_AI_MODEL="Qwen3.5-27B-FP8"
+
+# Search & Performance
+export SORT_ORDER="bestmatch"
+export COMPOID_TIMEOUT="30.0"
+export COMPOID_MAX_CONCURRENT="10"
+
+# Logging
+export LOG_LEVEL="DEBUG"
+export LOG_API_REQUESTS="true"
+```
+---
+
+## Development
+
+### Setup Development Environment
+
+#### With pip
+```bash
+git clone https://github.com/compoid/compoid-mcp.git
+cd compoid-mcp
+pip install -e ".[dev]"
+```
+
+#### With pip/build
+```bash
+# Build source distribution and wheel
+python -m build
+
+# This creates:
+# - dist/compoid_mcp-1.0.0.tar.gz
+# - dist/compoid_mcp-1.0.0-py3-none-any.whl
+```
+
+#### Package Contents Verification
+```bash
+# Check source distribution contents
+tar -tzf dist/compoid_mcp-1.0.0.tar.gz
+
+# Check wheel contents  
+unzip -l dist/compoid_mcp-1.0.0-py3-none-any.whl
+```
+For detailed packaging instructions, see [PACKAGING.md](PACKAGING.md).
+
 ## 📖 Documentation
 
 - [Compoid API Docs](https://www.compoid.com/documentation)
@@ -461,13 +495,6 @@ For detailed packaging instructions, see [PACKAGING.md](PACKAGING.md).
 
 We welcome contributions! See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 
-### Good First Issues
-- [ ] Add TypeScript definitions for all tools
-- [ ] Write integration tests
-- [ ] Create more example configurations
-- [ ] Add Docker Compose setup
-- [ ] Write migration guide from REST API
-
 ---
 
 ## 🔒 Security
@@ -478,14 +505,6 @@ We welcome contributions! See [CONTRIBUTING.md](./CONTRIBUTING.md) for guideline
 - **Data Privacy**: No data stored without consent
 
 See [SECURITY.md](./SECURITY.md) for responsible disclosure.
-
----
-
-## 📊 Metrics
-
-- **GitHub Stars**: ⭐ Star us if you find this useful!
-- **Downloads**: Tracked via npm and Docker Hub
-- **Community**: Join our [Discord](https://discord.gg/compoid)
 
 ---
 
@@ -516,4 +535,3 @@ MIT License - see [LICENSE](./LICENSE) for details.
 If you use Compoid data in your research, please cite:
 
 (2026). Compoid: Content Repository AI Server
-
