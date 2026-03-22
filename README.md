@@ -75,7 +75,7 @@ For Claude Desktop, add the following to your claude_desktop_config.json:
 
 ### VSCode Copilot
 
-For VSCode Copilot, add the following to your <workspace>/.vscode/mcp.json
+For VSCode Copilot, add the following to your {workspace}/.vscode/mcp.json
 ```json
 {
   "servers": {
