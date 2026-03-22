@@ -17,19 +17,29 @@ def format_work_summary(work: Dict[str, Any]) -> str:
     """Format a work into a readable summary."""
     title = work.get("metadata", {}).get("title", 'N/A')
     authors = []
-
-    for authorship in work.get("metadata", {}).get("contributors", []):
+    for authorship in work.get("metadata", {}).get("creators", []):
         if author := authorship.get("person_or_org"):
             if name := author.get("name"):
                 authors.append(name)
 
-    authors_str = ", ".join(authors[:10])  # Limit to first 5 authors
-    if len(work.get("metadata", {}).get("contributors", [])) > 10:
+    authors_str = ", ".join(authors[:10])  # Limit to first 10 authors
+    if len(work.get("metadata", {}).get("creators", [])) > 10:
         authors_str += " +"
+
+    keywords = []
+    for contributors_keywords in work.get("metadata", {}).get("contributors", []):
+        if keyword := contributors_keywords.get("person_or_org"):
+            if name := keyword.get("name"):
+                keywords.append(name)
+
+    keywords_str = ", ".join(keywords[:20])  # Limit to first 20 contributors & keywords
+    if len(work.get("metadata", {}).get("contributors", [])) > 20:
+        keywords_str += " +"
 
     created = work.get("metadata", {}).get("publication_date", 'N/A')
     updated = work.get("updated", 0)
     main_description = work.get("metadata", {}).get("description", 'N/A')
+    main_community = work.get("parent", {}).get("communities", {}).get("default", 'N/A')
 
     # Get additional_descriptions
     descriptions = []
@@ -51,6 +61,15 @@ def format_work_summary(work: Dict[str, Any]) -> str:
 
     topics_str = ", ".join(topics) if topics else "No topics"
 
+    # Get communities
+    communities = []
+    for community in work.get("parent", {}).get("communities", {}).get("entries", [])[:5]:  # First 5 communities
+        if community_name := community.get("metadata").get("title"):
+            communities.append(community_name)
+        if community_id := community.get("id"):
+            communities.append(community_id)
+    communities_str = ", ".join(communities) if communities else "No community names"
+
     # Get related identifiers
     identifiers	 = []
     for identifier in work.get("metadata", {}).get("related_identifiers", [])[:5]:  # First 5 identifiers
@@ -59,15 +78,27 @@ def format_work_summary(work: Dict[str, Any]) -> str:
 
     identifiers_str = ", ".join(identifiers) if identifiers else "N/A"
 
+    # Get references
+    references	 = []
+    for reference in work.get("metadata", {}).get("references", [])[:5]:  # First 5 identifiers
+        if reference_name := reference.get("reference"):
+            references.append(reference_name)
+
+    references_str = ", ".join(references) if references else "N/A"
+
     return (
         f"**{title}**\n"
-        f"Keywords: {authors_str}\n"
+        f"Authors: {authors_str}\n"
+        f"Contributors & Keywords: {keywords_str}\n"
         f"Created: {created} | Updated: {updated}\n"
         f"Description: {main_description}\n"
         f"Additional descriptions: {descriptions_str}\n"
         f"Record URL: {url}\n"
         f"Topics: {topics_str}\n"
+        f"Default community ID: {main_community}\n"
+        f"Communities: {communities_str}\n"
         f"Related works: {identifiers_str}\n"
+        f"References: {references_str}\n"
         f"Record ID: {id}\n"
         f"Image URL: 'https://www.compoid.com/api/iiif/record:{id}:{image}/full/!1024,1024/0/default.png'\n"
     )
@@ -443,6 +474,38 @@ async def search_records(client: CompoidClient, arguments: Dict[str, Any]) -> Li
     if file_type := arguments.get("file_type"):
         filter_file_type["files.entries.ext"] = file_type
 
+
+#    filter_publication_date_range= {}
+#    if publication_datedate_range := arguments.get("publication_date_range"):
+#        filter_publication_date_range["metadata.publication_date"] = publication_date_range
+#
+#    # Handle year range properly using separate filters
+#    date_from = arguments.get("date_from")
+#    date_to = arguments.get("date_to")
+#
+#    # Ensure year values are integers
+#    if date_from is not None:
+#        date_from = int(date_from)
+#    if date_to is not None:
+#        date_to = int(date_to)
+#
+#      href="/search?page=1&amp;size=20&amp;q=metadata.publication_date:%5B2022-01-01%20TO%202022-02-01%5D"
+#      ><code>metadata.publication_date:[2022-01-01 TO 2022-02-01]</code></a
+#      <code>metadata.publication_date:{* TO 2022-01-01}</code>: All days until 2022.
+#      <code>metadata.publication_date:[2022-01-01 TO *]</code>: All days from 2022.
+#
+#    # Always use date range filters for year filtering
+#    if date_from and date_to:
+#        filter_params["from_publication_date"] = f"{date_from}"
+#        filter_params["to_publication_date"] = f"{date_to}"
+#    elif date_from:
+#        filter_params["from_publication_date"] = f"{date_from}"
+#    elif date_to:
+#        filter_params["to_publication_date"] = f"{date_to}"
+
+    # Build filter parameters
+
+
     try:
         response = await client.get_works(
             search=query,
@@ -776,6 +839,9 @@ async def upload_file(arguments: Dict[str, Any]) -> List[TextContent]:
     if config.proxy_token:
         headers["Authorization"] = f"Bearer {config.proxy_token}"
 
+    with open('mcp_headers.txt', 'w') as wfile:
+        wfile.write("headers: {}\n".format(headers))
+ 
     try:
         async with httpx.AsyncClient(timeout=120.0) as http:
             response = await http.post(
@@ -860,7 +926,7 @@ async def create_record(client: CompoidClient, arguments: Dict[str, Any]) -> Lis
                      f"MCP servers cannot access client-local files directly.\n"
                      f"The file must be uploaded to the server first using one of these methods:\n\n"
                      f"1. Convert to base64 (example.md as markdown mime type): \"file_upload\": \"data:text/markdown;base64,XXXX\",\n"
-                     f"2. Upload manually: curl -X POST --header \"Authorization: Bearer UPLOAD_AUTH_TOKEN\" https://mcps.compoid.com/upload --data-binary @{os.path.basename(file_upload)}\n"
+                     f"2. Upload manually: curl -X POST https://mcps.compoid.com/upload --data-binary @{os.path.basename(file_upload)}\n"
                      f"3. Use a server-side path (starts with /projects/)\n"
                      f"Then use the returned server path as the file_upload parameter."
             )]
@@ -965,7 +1031,7 @@ async def update_record(client: CompoidClient, arguments: Dict[str, Any]) -> Lis
                          f"MCP servers cannot access client-local files directly.\n"
                          f"The file must be uploaded to the server first using one of these methods:\n\n"
                          f"1. Convert to base64 (example.md as markdown mime type): \"file_upload\": \"data:text/markdown;base64,XXXX\",\n"
-                         f"2. Upload manually: curl -X POST --header \"Authorization: Bearer UPLOAD_AUTH_TOKEN\" https://mcps.compoid.com/upload --data-binary @{os.path.basename(file_upload)}\n"
+                         f"2. Upload manually: curl -X POST https://mcps.compoid.com/upload --data-binary @{os.path.basename(filter_file_upload)}\n"
                          f"3. Use a server-side path (starts with /projects/)\n"
                          f"Then use the returned server path as the file_upload parameter."
                 )]
