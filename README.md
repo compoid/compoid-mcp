@@ -75,13 +75,13 @@ For Claude Desktop, add the following to your claude_desktop_config.json:
 
 ### VSCode Copilot
 
-For VSCode Copilot, add the following to your ~/.config/Code/User/mcp.json
+For VSCode Copilot, add the following to your <workspace>/.vscode/mcp.json
 ```json
 {
   "servers": {
     "Compoid": {
       "url": "https://mcpv.compoid.com/mcp",
-      "transportType": "streamable-http",
+      "type": "http",
       "headers": {
         "X-Compoid-Repo-Key": "YOUR_API_KEY"
       }
@@ -119,7 +119,7 @@ Note: Replace YOUR_API_KEY with your actual Compoid Repository Key.
         "COMPOID_AI_API_URL": "https://api.compoid.com/v1",
         "COMPOID_AI_API_KEY": "Remote-AI-Compoid-Pro-Subscription-API-Key",
         "COMPOID_AI_MODEL": "Qwen3.5-27B-FP8",
-        "COMPOID_UPLOAD_URL": "https://mcps.compoid.com/upload",
+        "COMPOID_UPLOAD_URL": "https://mcpv.compoid.com/upload",
         "UPLOAD_AUTH_TOKEN": "Remote-MCP-Compoid-Pro-Subscription-API-Key"
       }
     }
@@ -384,9 +384,10 @@ cd /home/username/workspace/compoid-mcp
 pip install -e ".[dev]"
 
 #### VSCODE Agent setup
-mkdir -p /home/username/workspace/.github/
-cp /home/username/workspace/compoid-mcp/vscode-compoid-free-mcp.json /home/username/.config/Code/User/mcp.json
-cp /home/username/workspace/compoid-mcp/copilot-instructions.md /home/username/repos/.github/copilot-instructions.md
+mkdir -p /home/username/workspace/.vscode
+mkdir -p /home/username/workspace/.github
+cp /home/username/workspace/compoid-mcp/vscode-compoid-free-mcp.json /home/username/workspace/.vscode/mcp.json
+cp /home/username/workspace/compoid-mcp/copilot-instructions.md /home/username/workspace/.github/copilot-instructions.md
 
 ```
 
