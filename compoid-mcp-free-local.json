@@ -22,6 +22,7 @@
         "COMPOID_REPO_API_KEY": "Repository-Compoid-Free-Subscription-API-Key",
         "COMPOID_AI_API_URL": "https:///api.openai.com/v1",
         "COMPOID_AI_API_KEY": "Your-Open-AI-Subscription-API-Key",
+        "COMPOID_AI_MODEL": "Qwen3.5-27B-FP8",
         "COMPOID_UPLOAD_URL": "https://mcps.compoid.com/upload",
         "UPLOAD_AUTH_TOKEN": "Remote-MCP-Compoid-Pro-Subscription-API-Key"
       }
