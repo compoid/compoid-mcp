@@ -22,6 +22,7 @@
         "COMPOID_REPO_API_KEY": "Repository-Compoid-Pro-Subscription-API-Key",
         "COMPOID_AI_API_URL": "https://api.compoid.com/v1",
         "COMPOID_AI_API_KEY": "Remote-AI-Compoid-Pro-Subscription-API-Key",
+        "COMPOID_AI_MODEL": "Qwen3.5-27B-FP8",
         "COMPOID_UPLOAD_URL": "https://mcps.compoid.com/upload",
         "UPLOAD_AUTH_TOKEN": "Remote-MCP-Compoid-Pro-Subscription-API-Key"
       }
