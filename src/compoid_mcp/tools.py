@@ -474,38 +474,6 @@ async def search_records(client: CompoidClient, arguments: Dict[str, Any]) -> Li
     if file_type := arguments.get("file_type"):
         filter_file_type["files.entries.ext"] = file_type
 
-
-#    filter_publication_date_range= {}
-#    if publication_datedate_range := arguments.get("publication_date_range"):
-#        filter_publication_date_range["metadata.publication_date"] = publication_date_range
-#
-#    # Handle year range properly using separate filters
-#    date_from = arguments.get("date_from")
-#    date_to = arguments.get("date_to")
-#
-#    # Ensure year values are integers
-#    if date_from is not None:
-#        date_from = int(date_from)
-#    if date_to is not None:
-#        date_to = int(date_to)
-#
-#      href="/search?page=1&amp;size=20&amp;q=metadata.publication_date:%5B2022-01-01%20TO%202022-02-01%5D"
-#      ><code>metadata.publication_date:[2022-01-01 TO 2022-02-01]</code></a
-#      <code>metadata.publication_date:{* TO 2022-01-01}</code>: All days until 2022.
-#      <code>metadata.publication_date:[2022-01-01 TO *]</code>: All days from 2022.
-#
-#    # Always use date range filters for year filtering
-#    if date_from and date_to:
-#        filter_params["from_publication_date"] = f"{date_from}"
-#        filter_params["to_publication_date"] = f"{date_to}"
-#    elif date_from:
-#        filter_params["from_publication_date"] = f"{date_from}"
-#    elif date_to:
-#        filter_params["to_publication_date"] = f"{date_to}"
-
-    # Build filter parameters
-
-
     try:
         response = await client.get_works(
             search=query,
