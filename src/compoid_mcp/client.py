@@ -1001,10 +1001,10 @@ class CompoidClient:
             # Step 1: Get existing record details
             logger.debug(f"Fetching existing record: {work_id}")
             existing_record = await self.get_works(work_id=work_id)
-            
+
             if not existing_record:
                 return False, None
-                      
+
             # Step 2: Create new draft version from existing record
             # POST /api/records/{id}/versions
             communities_endpoint = f"records/{work_id}/communities"
@@ -1037,18 +1037,35 @@ class CompoidClient:
             files_url = draft_response["links"]["files"]
             
             logger.debug(f"Created draft version: {draft_id}")
-            
+
+            # Check if source record is metadata-only and mark draft accordingly
+            async with self._rate_limiter:
+                record_check = await self._client.get(f"https://www.compoid.com/api/records/{work_id}", headers=headers)
+                record_data = record_check.json()
+
+            # After creating the draft (after logger.debug(f"Created draft version: {draft_id}"))
+            logger.debug(f"Created draft version: {draft_id}")
+
+            # Check if source record is metadata-only
+            record_url = f"https://www.compoid.com/api/records/{work_id}"
+            async with self._rate_limiter:
+                record_check = await self._client.get(record_url, headers=headers)
+                record_data = record_check.json()
+
+            is_metadata_only = record_data.get("access", {}).get("status") == "metadata-only"
+
             # Step 3: Link files from previous version (unless new file_upload provided)
-            # POST /api/records/{id}/draft/actions/files-import
             if not file_upload:
-                # Construct the files-import URL from the draft URL
-                import_files_url = f"{draft_url}/actions/files-import"
-                logger.debug(f"Linking files from previous version")
-                async with self._rate_limiter:
-                    import_response = await self._client.post(import_files_url, headers=headers)
-                    import_response.raise_for_status()
-                logger.debug(f"Successfully linked files from previous version")
-            
+                if is_metadata_only:
+                    logger.debug(f"Record {work_id} is metadata-only, skipping file import")
+                else:
+                    import_files_url = f"{draft_url}/actions/files-import"
+                    logger.debug(f"Linking files from previous version")
+                    async with self._rate_limiter:
+                        import_response = await self._client.post(import_files_url, headers=headers)
+                        import_response.raise_for_status()
+                    logger.debug(f"Successfully linked files from previous version")
+
             # Step 4: Prepare metadata updates
             # Use provided values or fall back to existing record values
             existing_metadata = existing_record.get("metadata", {})
@@ -1086,6 +1103,7 @@ class CompoidClient:
             
             # Extract content ratings from additional_titles if they exist
             existing_additional_titles = existing_metadata.get("additional_titles", [])
+
             content_ratings = {}
             for title_entry in existing_additional_titles:
                 rating_type = title_entry.get("type", {}).get("id")
@@ -1211,8 +1229,8 @@ class CompoidClient:
             # Prepare dates
             today = date.today()
             update_date = today.strftime("%Y-%m-%d")
+
             publication_date = existing_metadata.get("publication_date", (today - timedelta(days=1)).strftime("%Y-%m-%d"))
-            
             # Use existing or default values for fields not being updated
             file_name = clean_file_upload if file_upload else existing_metadata.get("title", "metadata-update")
             default_preview = file_name
@@ -1289,6 +1307,14 @@ class CompoidClient:
             )
             
             # Step 7: Update draft metadata
+            # Parse the rendered template as JSON
+            metadata_dict = json.loads(data)
+
+            # For metadata-only records, ADD files.enabled: false to the payload
+            if is_metadata_only:
+                metadata_dict["files"] = {"enabled": False}
+                logger.debug(f"Added files.enabled=false to metadata-only record")
+                data = json.dumps(metadata_dict)
             async with self._rate_limiter:
                 update_response = await self._client.put(
                     draft_url,
