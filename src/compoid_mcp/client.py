@@ -145,6 +145,48 @@ class CompoidClient:
             logger.warning(f"Error processing file input: {e}. Treating as file path.")
             return file_input, False
 
+
+    def _sanitize_content_block(self, content_block: Dict[str, Any], max_length: int = 8000) -> Dict[str, Any]:
+        """Sanitize content_block to ensure it's safe for JSON serialization and AI API consumption."""
+        if not isinstance(content_block, dict):
+            logger.warning(f"content_block is not a dict, converting: {type(content_block)}")
+            content_block = {"type": "text", "text": str(content_block)}
+        
+        if "type" not in content_block:
+            content_block["type"] = "text"
+        
+        content_type = content_block.get("type", "text")
+        
+        if content_type == "text" and "text" in content_block:
+            text = content_block["text"]
+            if not isinstance(text, str):
+                text = str(text)
+            
+            # Fix escaped quotes (\' → ')
+            text = text.replace("\\'", "'")
+            
+            # Remove control characters except tab/newline/carriage return
+            text = ''.join(
+                char if (ord(char) >= 32 or ord(char) in (9, 10, 13)) else ' '
+                for char in text
+            )
+            
+            # Normalize whitespace (3+ newlines -> 2 newlines)
+            text = re.sub(r'\n{3,}', '\n\n', text)
+            
+            # Truncate if too long
+            if len(text) > max_length:
+                truncate_at = text.rfind('.', max_length - 500, max_length)
+                if truncate_at == -1:
+                    truncate_at = text.rfind('\n', max_length - 500, max_length)
+                if truncate_at == -1:
+                    truncate_at = max_length
+                text = text[:truncate_at] + "\n\n... [content truncated due to length]"
+            
+            content_block["text"] = text
+        
+        return content_block
+
     @property
     def timeout(self) -> float:
         """Get timeout value, using config if not set explicitly."""
@@ -542,6 +584,8 @@ class CompoidClient:
                     "type": "text", 
                     "text": md_content
                 }
+                # Sanitize the content block for AI API
+                content_block = self._sanitize_content_block(content_block)
             elif mime_type == "application/pdf":
                 # PDF files - include filename reference since we can't extract text directly
                 content_block = {
@@ -637,12 +681,11 @@ class CompoidClient:
                         "max_tokens": 1200,
                         "stream": False,
                         "chat_template_kwargs": {
-                            "enable_thinking": True
+                            "enable_thinking": False
                         },
                         "response_format": { 'type': 'json_object' },
                         "top_p": 0.95
                     }
-
 
                     start=time.time()
                     imgresponse = requests.request("POST", f"{config.ai_api_base_url}/chat/completions", json=imgpayload, headers=headers)
@@ -662,11 +705,6 @@ class CompoidClient:
                           }
                         ],
                         "temperature": 0.3,
-                        "extra_body": {
-                            "chat_template_kwargs": {
-                                "enable_thinking": False
-                            }
-                        },
                         "chat_template_kwargs": {"enable_thinking": False},
                         "frequency_penalty": 0.2,
                         "presence_penalty": 0.2,
