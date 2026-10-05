@@ -15,9 +15,12 @@ from compoid_mcp.tools import (
     search_records,
     create_record,
     update_record,
+    delete_record,
     upload_file,
     create_community,
     update_community,
+    search_collections,
+    get_collection_records,
 )
 
 # Initialize FastMCP server
@@ -198,13 +201,41 @@ async def Compoid_create_record(
     community_id: str,
     file_upload: str,
     creators: list[str],
-    keywords: list[str] = None,
+    keywords: list[str],
     references: list[str] = None,
+    subjects: list[str] = None,
     title: str = None,
     description: str = None,
     resource_type: str = None
 ) -> str:
-    """Create a new Compoid record (images, videos, papers, articles, analysis)."""
+    """Create a new Compoid record and submit it to a community for review.
+
+    Required:
+        community_id: community slug (e.g. 'physics' - browse
+            https://www.compoid.com/communities or use Compoid_search_communities),
+            a community UUID, or a home-community slug 'user-<id>'.
+        file_upload: the file to attach. Accepted: (1) a data URI
+            'data:<mime>;base64,<b64>' (base64-encode client-side files), or (2) a
+            path on the MCP server host such as '/projects/...' (e.g. the path
+            returned by Compoid_upload_file). Plain client-local paths are NOT
+            accessible to the server.
+        creators: non-empty list of author / AI-model names (e.g.
+            ['John Doe']); for AI-generated content include the model name
+            as a co-creator (e.g. ['Qwen']).
+        keywords: non-empty list of tags (e.g. ['Compoid', 'MCP']) - records
+            without keywords are hard to discover.
+
+    Recommended (thin records are hard to discover and may be rejected):
+        title, description: a clear title and abstract.
+        resource_type: one of analysis, image, video, audio, publication, document,
+            software, project, dataset, presentation, workflow, tutorial, other -
+            any other value is rejected with 400 'Not a valid value.' (when omitted
+            it is inferred from the file MIME type).
+        subjects: up to 5 subject display names from the Compoid subject vocabulary
+            (https://www.compoid.com/subjects); invalid names cause a 400.
+            "Artificial Intelligence" is always appended as a default subject.
+
+    """
     setup_user_keys_from_headers()
     client = CompoidClient(sort=sort)
     arguments = {
@@ -215,6 +246,7 @@ async def Compoid_create_record(
         "creators": creators,
         "keywords": keywords,
         "references": references,
+        "subjects": subjects,
         "resource_type": resource_type
     }
     # Remove None values
@@ -233,9 +265,31 @@ async def Compoid_update_record(
     creators: list[str] = None,
     keywords: list[str] = None,
     references: list[str] = None,
+    subjects: list[str] = None,
     resource_type: str = None
 ) -> str:
-    """Update an existing Compoid record. Can update metadata only or replace both file and metadata."""
+    """Update an existing Compoid record (creates a new version, pending review).
+
+    Only pass the fields you want to change; unprovided fields keep their current
+    values. An update with no changed fields is rejected as a no-op.
+
+    Required:
+        work_id: the record to update - a published record PID (e.g.
+            '4171t-rc787'), a full record URL, or its OAI. Drafts have no PID until
+            published, so only published records can be updated.
+
+    Optional (any subset):
+        file_upload: replacement file (data URI or MCP-server-host path) - only when
+            replacing the file.
+        title, description, creators, keywords, references: metadata to change.
+        resource_type: must be one of analysis, image, video, audio, publication,
+            document, software, project, dataset, presentation, workflow, tutorial,
+            other - any other value is rejected with 400 'Not a valid value.'
+        subjects: up to 5 subject display names
+            (https://www.compoid.com/subjects). Omit to keep the record's existing
+            subjects; "Artificial Intelligence" is always appended as a default.
+
+    """
     setup_user_keys_from_headers()
     client = CompoidClient(sort=sort)
     arguments = {
@@ -246,6 +300,7 @@ async def Compoid_update_record(
         "creators": creators,
         "keywords": keywords,
         "references": references,
+        "subjects": subjects,
         "resource_type": resource_type
     }
     # Remove None values
@@ -254,6 +309,36 @@ async def Compoid_update_record(
     async with client:
         result = await update_record(client, arguments)
         return result[0].text if result else "Failed to update record"
+
+@mcp.tool(name="Compoid_delete_record")
+async def Compoid_delete_record(
+    work_id: str
+) -> str:
+    """Delete a published Compoid record. IRREVERSIBLE.
+
+    The record is tombstoned and drops out of all search results. Use it to
+    clean up test records. Only PUBLISHED records can be deleted - drafts have
+    no PID until they are published, so a draft must be published first (or
+    cancelled via the review flow) before it can be addressed this way.
+
+    The API token's user must be the record's creator or an owner of the record's
+    community; otherwise the API returns 403.
+
+    Required:
+        work_id: the record to delete - a published record PID (e.g.
+            '4171t-rc787'), a full record URL
+            (https://www.compoid.com/records/<pid>), or its OAI.
+
+    On success returns a confirmation (HTTP 204). On failure the error includes
+    an actionable hint (403 = wrong user/permissions, 404 = not found or draft).
+    """
+    setup_user_keys_from_headers()
+    client = CompoidClient(sort=sort)
+    arguments = {"work_id": work_id}
+
+    async with client:
+        result = await delete_record(client, arguments)
+        return result[0].text if result else "Failed to delete record"
 
 @mcp.tool(name="Compoid_create_community")
 async def Compoid_create_community(
@@ -323,6 +408,50 @@ async def Compoid_update_community(
     async with client:
         result = await update_community(client, arguments)
         return result[0].text if result else "Failed to update community"
+
+
+@mcp.tool(name="Compoid_search_collections")
+async def Compoid_search_collections(
+    community_id: str,
+    query: str = None,
+    limit: int = 20
+) -> str:
+    """Search for collections within a Compoid community (e.g. Publications, Datasets, subject collections). community_id accepts a UUID or slug; omit query to list all collections."""
+    setup_user_keys_from_headers()
+    client = CompoidClient(sort=sort)
+    arguments = {
+        "community_id": community_id,
+        "query": query,
+        "limit": limit
+    }
+    # Remove None values
+    arguments = {k: v for k, v in arguments.items() if v is not None}
+
+    async with client:
+        result = await search_collections(client, arguments)
+        return result[0].text if result else "No collections found"
+
+
+@mcp.tool(name="Compoid_get_collection_records")
+async def Compoid_get_collection_records(
+    collection_id: int,
+    query: str = None,
+    limit: int = 10
+) -> str:
+    """Get the records that belong to a specific Compoid collection. collection_id is the numeric ID from Compoid_search_collections; an optional query is AND-ed on top of the collection's own scope."""
+    setup_user_keys_from_headers()
+    client = CompoidClient(sort=sort)
+    arguments = {
+        "collection_id": collection_id,
+        "query": query,
+        "limit": limit
+    }
+    # Remove None values
+    arguments = {k: v for k, v in arguments.items() if v is not None}
+
+    async with client:
+        result = await get_collection_records(client, arguments)
+        return result[0].text if result else "No records found"
 
 
 def main():

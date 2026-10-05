@@ -21,6 +21,91 @@ import time
 from datetime import date, timedelta
 from jinja2 import Environment, FileSystemLoader
 
+
+CLASSIFICATION_MAP = {
+    'general': 'public',
+    'open_access': 'public',
+    'private': 'internal',
+    'sensitive': 'confidential',
+    'proprietary': 'restricted',
+}
+
+
+# Actionable hints for common API status codes, appended to error messages so
+# agents can self-correct without trial and error.
+_STATUS_HINTS = {
+    400: "Fix the offending request field: enum fields must use valid values "
+         "('resource_type' must be one of: analysis, image, video, audio, publication, "
+         "document, software, project, dataset, presentation, workflow, tutorial, other; "
+         "'subjects' must be display names from https://www.compoid.com/subjects, max 5) and "
+         "required fields (creators, keywords) must be non-empty.",
+    401: "The API token is missing, invalid, or expired (check the Bearer / repo-key config).",
+    403: "Permission denied - the token's user is not a member/owner of this community, or the "
+         "record is restricted. For home communities (user-<id>) the token must belong to that user.",
+    404: "The record/community/work_id does not exist (note: drafts are not addressable by PID "
+         "until published; check the ID for typos).",
+    410: "The record has already been deleted (tombstoned) - nothing to do; treat this as a "
+         "successful cleanup (deletes are idempotent).",
+}
+
+
+def _hint_for(status_code: int) -> str:
+    """Return an actionable hint suffix for an HTTP status code."""
+    hint = _STATUS_HINTS.get(status_code)
+    return f"\nHint: {hint}" if hint else ""
+
+
+def classify_content(content_class):
+    """Map a VLM content-rating name to a valid v14 classification (id, title).
+
+    Ratings keep their granular labels (Private -> internal, Sensitive ->
+    confidential, Proprietary -> restricted); only General/Open Access are
+    public. Access restriction is decided separately by the caller via
+    ``content_public`` (``content_class_id == 'public'``), so every
+    non-public rating yields a restricted record regardless of its label;
+    unknown ratings fail closed to ``restricted`` here.
+    """
+    # The VLM emits "Open Access" (space); the map key is "open_access".
+    # Normalise spaces to underscores so every rating hits its real entry.
+    key = str(content_class).strip().lower().replace(' ', '_')
+    cid = CLASSIFICATION_MAP.get(key, 'restricted')
+    return cid, cid.capitalize()
+
+
+def resolve_community_visibility(community_ref: str):
+    """Resolve a community slug or UUID via the API.
+
+    Home communities (``user-<id>``) and any community with
+    ``access.visibility == "restricted"`` need records with restricted access;
+    publishing a public record into a restricted community fails with
+    400 "A public record cannot be included in a restricted community."
+
+    Returns (community_id, is_restricted) where community_id is the canonical
+    UUID. On any failure returns (None, False) so callers fall back to the
+    existing behavior (dict-based resolution, public access).
+    """
+    try:
+        resp = requests.get(
+            f"{config.repo_api_base_url}/communities/{community_ref}",
+            headers={"Authorization": f"Bearer {config.repo_api_key}"},
+            timeout=15,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            return data.get("id"), (data.get("access") or {}).get("visibility") == "restricted"
+        logger.warning(f"Community visibility check for {community_ref}: HTTP {resp.status_code}")
+    except Exception as e:
+        logger.warning(f"Community visibility check failed for {community_ref}: {e}")
+    return None, False
+
+
+# Default subject always appended to every record (mirrors default_reference).
+# Subject anchors are the display name with spaces replaced by underscores
+# (verified against all live subjects at https://www.compoid.com/subjects).
+DEFAULT_SUBJECT = "Artificial Intelligence"
+DEFAULT_SUBJECT_MAP = "Artificial_Intelligence"
+
+
 class CompoidClient:
     """Async client for the Compoid API."""
 
@@ -187,6 +272,38 @@ class CompoidClient:
         
         return content_block
 
+    @staticmethod
+    def _vlm_content(resp_text: str) -> str:
+        """Safely extract the message content from a VLM chat-completion response.
+
+        vLLM/OpenAI error bodies (e.g. 400 BadRequest, 401 Unauthorized) do NOT
+        contain a 'choices' key, so a raw ['choices'][0][...]['content'] read turns
+        a real error into a confusing KeyError. Return the content when present,
+        else raise ValueError with the actual error body so callers can report it.
+        """
+        if isinstance(resp_text, dict):
+            data = resp_text
+        else:
+            try:
+                data = json.loads(resp_text)
+            except (json.JSONDecodeError, TypeError) as e:
+                raise ValueError(f"VLM response is not valid JSON: {str(resp_text)[:500]!r} ({e})")
+
+        # Error-shaped responses: {"error": {...}} / {"detail": ...} / {"error": "..."}
+        if isinstance(data, dict) and (data.get("error") or data.get("detail")):
+            err = data.get("error") or data.get("detail")
+            if isinstance(err, dict):
+                err = err.get("message") or str(err)
+            raise ValueError(f"VLM API returned an error: {err}")
+
+        try:
+            content = data["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError) as e:
+            raise ValueError(f"VLM response missing 'choices[0].message.content': {str(data)[:500]!r} ({e})")
+        if not isinstance(content, str):
+            content = str(content)
+        return content
+
     @property
     def timeout(self) -> float:
         """Get timeout value, using config if not set explicitly."""
@@ -194,7 +311,13 @@ class CompoidClient:
 
     async def __aenter__(self) -> "CompoidClient":
         """Async context manager entry."""
-        headers = {"User-Agent": config.get_user_agent()}
+        headers = {
+            "User-Agent": config.get_user_agent(),
+            # Authenticated read-back: restricted records (home communities
+            # user-<id>) 403 on anonymous reads; the repo key works as Bearer
+            # on GET /api/records (verified 2026-09-16).
+            "Authorization": f"Bearer {config.repo_api_key}",
+        }
         self._client = httpx.AsyncClient(timeout=self.timeout, headers=headers)
         return self
 
@@ -239,7 +362,7 @@ class CompoidClient:
 
                 return response.json()
             except httpx.HTTPStatusError as e:
-                error_msg = f"Compoid API error ({e.response.status_code}): {e.response.text}"
+                error_msg = f"Compoid API error ({e.response.status_code}): {e.response.text}{_hint_for(e.response.status_code)}"
                 logger.error(error_msg)
                 raise Exception(error_msg)
             except httpx.RequestError as e:
@@ -446,6 +569,113 @@ class CompoidClient:
 
         return await self._make_request(endpoint, params)
 
+    @staticmethod
+    def _collection_node(entry: Any) -> Optional[Dict[str, Any]]:
+        """Extract the collection node from a collection-trees entry.
+
+        The API returns each collection as a wrapper dict like
+        {"root": <id>, "<id>": {<node fields>}}. Plain node dicts are
+        tolerated as well so the helper stays forward-compatible.
+        """
+        if not isinstance(entry, dict):
+            return None
+        root = entry.get("root")
+        if isinstance(root, int):
+            node = entry.get(str(root))
+            if isinstance(node, dict) and "id" in node:
+                return node
+        for key, value in entry.items():
+            if key != "root" and isinstance(value, dict) and "id" in value:
+                return value
+        if "id" in entry and "children" in entry:
+            return entry
+        return None
+
+    def _flatten_collection_trees(self, trees_response: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Flatten a collection-trees response into a flat list of collections.
+
+        The endpoint returns {tree_id: {title, slug, collections: [...]}} and
+        each collection node may nest further collections under "children".
+        Each returned dict carries id, title, slug, tree, order, depth,
+        num_records, search_query and records_url.
+        """
+        collections: List[Dict[str, Any]] = []
+
+        def _walk(entries: Any, tree_name: str) -> None:
+            for entry in entries or []:
+                node = self._collection_node(entry)
+                if not node:
+                    continue
+                links = node.get("links") if isinstance(node.get("links"), dict) else {}
+                collections.append({
+                    "id": node.get("id"),
+                    "title": node.get("title"),
+                    "slug": node.get("slug"),
+                    "tree": tree_name,
+                    "order": node.get("order"),
+                    "depth": node.get("depth"),
+                    "num_records": node.get("num_records"),
+                    "search_query": node.get("search_query"),
+                    "records_url": links.get("search"),
+                })
+                _walk(node.get("children"), tree_name)
+
+        for tree in (trees_response or {}).values():
+            if isinstance(tree, dict):
+                _walk(tree.get("collections"), tree.get("title"))
+
+        return collections
+
+    async def _resolve_community_id(self, community: str) -> str:
+        """Resolve a community ID or slug to its UUID.
+
+        The collection-trees endpoint only works with UUIDs, so slugs are
+        resolved through the public community endpoint first.
+        """
+        response = await self.get_communities(community_id=community)
+        community_id = response.get("id") if isinstance(response, dict) else None
+        if not community_id:
+            raise Exception(f"Could not resolve community: {community}")
+        return community_id
+
+    async def get_collection_trees(self, community: str) -> List[Dict[str, Any]]:
+        """Get a community's collections from its collection trees.
+
+        Args:
+            community: Community ID (UUID) or slug.
+
+        Returns:
+            Flat list of collections (see _flatten_collection_trees).
+        """
+        community_id = await self._resolve_community_id(community)
+        response = await self._make_request(f"communities/{community_id}/collection-trees")
+        return self._flatten_collection_trees(response)
+
+    async def get_collection_records(
+        self,
+        collection_id: int,
+        q: Optional[str] = None,
+        size: int = 10
+    ) -> Dict[str, Any]:
+        """Get the records of a collection.
+
+        The API automatically applies the collection's own search_query; a
+        provided ``q`` is AND-ed on top of it. The endpoint rejects a
+        ``sort`` parameter, so records come back in Compoid's default order.
+
+        Args:
+            collection_id: Numeric collection ID (from get_collection_trees).
+            q: Optional additional search query.
+            size: Page size (max 50).
+
+        Returns:
+            Standard search response with a "hits" object.
+        """
+        params: Dict[str, Any] = {"size": min(int(size), 50)}
+        if q:
+            params["q"] = q
+        return await self._make_request(f"collections/{collection_id}/records", params)
+
     async def download_pdf(self, archive_url: str, file_path: str) -> bool:
         """Download a PDF from a given URL.
         
@@ -501,6 +731,7 @@ class CompoidClient:
         filter_title: Optional[str] = None,
         filter_description: Optional[str] = None,
         filter_references: list[str] = None,
+        filter_subjects: list[str] = None,
         filter_keywords: list[str] = None,
         filter_resource_type: list[str] = None
     ) -> Dict[str, Any]:
@@ -513,6 +744,7 @@ class CompoidClient:
             filter_title: Record title
             filter_description: Record description
             filter_references: List of references
+            filter_subjects: List of subject display names (https://www.compoid.com/subjects)
             filter_keywords: List of keywords
             filter_resource_type: List of resource types
         Returns:
@@ -587,11 +819,32 @@ class CompoidClient:
                 # Sanitize the content block for AI API
                 content_block = self._sanitize_content_block(content_block)
             elif mime_type == "application/pdf":
-                # PDF files - include filename reference since we can't extract text directly
+                # PDF files - extract the text and send it as a text block.
+                # (Previously sent as an image_url/file:// block, which the VLM
+                # cannot parse as an image and fails on.)
+                pdf_text = ""
+                try:
+                    import pdftotext  # pip package (poppler-backed), see pyproject.toml
+                    with open(file_path, "rb") as _f:
+                        _pdf = pdftotext.PDF(_f)
+                        _pages = []
+                        for _i, _page in enumerate(_pdf):
+                            if _i >= 20:  # keep first 20 pages to bound prompt size
+                                break
+                            _t = str(_page).strip()
+                            if _t:
+                                _pages.append(_t)
+                        pdf_text = "\n\n".join(_pages)
+                except Exception as e:
+                    logger.warning(f"pdftotext extraction failed: {e}")
+                    pdf_text = ""
+                if not pdf_text.strip():
+                    pdf_text = f"[PDF document: {os.path.basename(file_path)}]"
                 content_block = {
-                    "type": "image_url",
-                    "image_url": {"url": f"file://{file_path}"}
+                    "type": "text",
+                    "text": pdf_text
                 }
+                content_block = self._sanitize_content_block(content_block)
             elif mime_type in ("application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"):
                 # Excel files - include filename reference
                 content_block = {
@@ -620,15 +873,31 @@ class CompoidClient:
                 community = community_id.lower() if isinstance(community_id, str) else community_id
                 community_keywords = communitydict.get(community, "") or "AI-bots-playground"
                 systemroleschema = env.get_template('system-role-schema.json').render(communityid=community_keywords)
+                community_restricted = False
                 if len(community) != 36:
                     dicts = env.get_template('communitydict.json')
                     rendered_json_str_s = dicts.render()
                     communitydict = json.loads(rendered_json_str_s)
                     community = communitydict.get(community, "") or None
                     if community is None:
-                        error_msg = f"Community {community_id} not found: {str(e)}"
-                        logger.error(error_msg)
-                        return False, None
+                        # Home communities (user-<id>) are created by the bootstrap sweep and
+                        # are not in the static dict; resolve via the API. Restricted
+                        # communities require restricted records, otherwise publish fails
+                        # with: "A public record cannot be included in a restricted community."
+                        resolved, community_restricted = resolve_community_visibility(community_id)
+                        if resolved is None:
+                            error_msg = (
+                                f"Community '{community_id}' not found. Use a valid community slug "
+                                f"(e.g. 'physics' - browse https://www.compoid.com/communities), a "
+                                f"community UUID, or a home community slug 'user-<id>'."
+                            )
+                            logger.error(error_msg)
+                            raise ValueError(error_msg)
+                        community = resolved
+                else:
+                    # UUID input: pick up visibility so restricted home communities get
+                    # restricted records. Public communities fail open (unchanged behavior).
+                    _, community_restricted = resolve_community_visibility(community)
                 dictr = env.get_template('resourcetypedict.json')
                 rendered_json_str_r = dictr.render()
                 resourcetypedict = json.loads(rendered_json_str_r)
@@ -662,15 +931,22 @@ class CompoidClient:
                         logger.debug(f"Creating record with files: {file_path}")
 
                     headers = {"Content-Type": "application/json", 'Authorization': f"Bearer {config.ai_api_key}"}
-                    imgpayload = {
+                    ratingspayload = {
                         "model": config.ai_model,
                         "messages": [
-                            {"role": "system", "content": f"Evaluate the image content raitings using 'get_content_raitings' JSON schema: {systemroleschema}"},
+                            {"role": "system", "content": (
+                                f"You are a content access rater. Rate the provided content and return ONLY a JSON object with exactly "
+                                f"two keys: \"contentCategory\" (the string {community_keywords}) and \"contentAccessRatings\" - an array of five "
+                                f"objects, one per item name General, Sensitive, Proprietary, Open Access, Private, each "
+                                f"{{\"itemName\": <item name>, \"value\": <integer 0-9>}} where 9 = fully open/public and 0 = maximally "
+                                f"sensitive/restricted. Return the rating object only - do not repeat the schema, do not wrap the result "
+                                f"in a tool call, do not use markdown. Reference schema for the value bounds: {systemroleschema}"
+                            )},
                             {"role": "user", "content": [
                               content_block,
                               {
                                 "type": "text",
-                                "text": "Output content raitings for the image as JSON, use the 'get_content_raitings' tools and schema"
+                                "text": "Rate the content access of the provided content. Return the JSON object described above only - no explanation, no schema, no tool call."
                               },
                             ]
                           }
@@ -688,10 +964,31 @@ class CompoidClient:
                     }
 
                     start=time.time()
-                    imgresponse = requests.request("POST", f"{config.ai_api_base_url}/chat/completions", json=imgpayload, headers=headers)
+                    ratingsresponse = requests.request("POST", f"{config.ai_api_base_url}/chat/completions", json=ratingspayload, headers=headers)
                     print(time.time()-start)
 
-                    read_imgfile = json.loads(imgresponse.text)
+                    read_ratingsfile = json.loads(ratingsresponse.text)
+                    if ratingsresponse.status_code != 200 or read_ratingsfile.get("error") or read_ratingsfile.get("detail"):
+                        err_body = (read_ratingsfile.get("error") or read_ratingsfile.get("detail") or ratingsresponse.text)
+                        raise ValueError(f"VLM content-rating call failed (HTTP {ratingsresponse.status_code}): {str(err_body)[:500]}")
+
+                    # Fetch live subject vocabulary so the VLM can classify content topics
+                    subject_vocab = []
+                    subject_anchors = {}
+                    try:
+                        vocab_resp = requests.get(
+                            f"{config.repo_api_base_url}/subjects?size=200",
+                            headers={"Authorization": f"Bearer {config.repo_api_key}"},
+                            timeout=15
+                        )
+                        for h in vocab_resp.json()['hits']['hits']:
+                            if h.get('subject'):
+                                subject_vocab.append(h['subject'])
+                                subject_anchors[h['subject']] = h['id'].split('#', 1)[1] if '#' in h.get('id', '') else h['subject'].replace(" ", "_")
+                        logger.debug(f"Loaded {len(subject_vocab)} subjects for VLM classification")
+                    except Exception as e:
+                        logger.warning(f"Subject vocabulary fetch failed, VLM subjects will be empty: {e}")
+
                     payload = {
                         "model": config.ai_model,
                         "messages": [
@@ -699,7 +996,7 @@ class CompoidClient:
                               content_block,
                               {
                                 "type": "text",
-                                "text": "Analyze this file and provide a SINGLE JSON object with ALL of these fields:\n\n1. 'caption_llama32_short': A short one-sentence description of the file\n2. 'caption_qwen25vl_long': A detailed description with grounding and specific details\n3. 'wd_tagger_eva02_l': An array of 10-20 relevant tags (objects, style, file type, topics, etc.)\n\nIMPORTANT: Return ALL THREE FIELDS in ONE JSON object. Do not stop after the first field."
+                                "text": f"Analyze this file and provide a SINGLE JSON object with ALL of these fields:\n\n1. 'caption_llama32_short': A short one-sentence description of the file\n2. 'caption_qwen25vl_long': A detailed description with grounding and specific details\n3. 'wd_tagger_eva02_l': An array of 10-20 relevant tags (objects, style, file type, topics, etc.)\n4. 'subjects': An array of UP TO 4 subject names chosen EXACTLY (verbatim, do not modify casing or wording) from this fixed list: {json.dumps(subject_vocab)}. Do NOT include 'Artificial Intelligence' - it is added automatically.\n\nIMPORTANT: Return ALL FOUR FIELDS in ONE JSON object. Do not stop after the first field. The 'subjects' array MUST contain only names that appear verbatim in the list above. If the file content does not match any subject in the list, return an empty array []."
                               }
                             ]
                           }
@@ -726,6 +1023,9 @@ class CompoidClient:
                         clean_file_upload = clean_file_name.replace(' ', '_')[:50]
 
                 read_file = json.loads(response.text)
+                if response.status_code != 200 or read_file.get("error") or read_file.get("detail"):
+                    err_body = (read_file.get("error") or read_file.get("detail") or response.text)
+                    raise ValueError(f"VLM caption call failed (HTTP {response.status_code}): {str(err_body)[:500]}")
 
                 file_name = clean_file_upload
                 default_preview = clean_file_upload
@@ -733,19 +1033,19 @@ class CompoidClient:
                 today = date.today()
                 update_date = today.strftime("%Y-%m-%d")
                 publication_date = (today - timedelta(days = 1)).strftime("%Y-%m-%d")
-                mod_string_cogvlm_short1 = read_file['model']
+                mod_string_cogvlm_short1 = read_file.get('model', '')
                 caption_cogvlm_short = re.sub('\"', '*', str(mod_string_cogvlm_short1))
-                default_reference = "https://huggingface.co/" + caption_cogvlm_short
+                default_reference = f"https://www.compoid.com/communities/{community}/browse"
                 references = filter_references
-                mod_string_cogvlm_long1 = read_file['object']
+                mod_string_cogvlm_long1 = read_file.get('object', '')
                 mod_string_cogvlm_long2 =  re.sub('\n\t', '<p></p>', str(mod_string_cogvlm_long1))
                 mod_string_cogvlm_long3 =  re.sub('\n\n', '<p></p>', str(mod_string_cogvlm_long2))
                 caption_cogvlm_long = re.sub('\"', '*', str(mod_string_cogvlm_long3))
-                caption_llama32_medium = read_file['id']
+                # caption_llama32_medium = read_file.get('id', '')
 
                 # Parse JSON response directly instead of using string manipulation
                 try:
-                    content_raw = read_file['choices'][0]['message']['content']
+                    content_raw = self._vlm_content(read_file)
                     
                     # The AI may return multiple JSON objects, parse them all
                     merged_json = {}
@@ -767,12 +1067,28 @@ class CompoidClient:
                     ai_short_caption = merged_json.get('caption_llama32_short', '')
                     ai_long_caption = merged_json.get('caption_qwen25vl_long', '')
                     ai_tags = merged_json.get('wd_tagger_eva02_l', [])
+                    ai_subjects_raw = merged_json.get('subjects', [])
+
+                    # Validate VLM-returned subjects against the live vocabulary (case-insensitive exact match)
+                    vocab_lookup = {s.lower().strip(): s for s in subject_vocab}
+                    valid_ai_subjects = []
+                    for subj in (ai_subjects_raw if isinstance(ai_subjects_raw, list) else []):
+                        if isinstance(subj, str):
+                            norm = subj.lower().strip()
+                            if norm in vocab_lookup:
+                                canonical = vocab_lookup[norm]
+                                if canonical != DEFAULT_SUBJECT and canonical not in valid_ai_subjects:
+                                    valid_ai_subjects.append(canonical)
+                    # Cap at 4: the template always appends the default subject,
+                    # and the record schema allows a maximum of 5 total.
+                    valid_ai_subjects = valid_ai_subjects[:4]
 
                 except (json.JSONDecodeError, KeyError, TypeError) as e:
                     logger.warning(f"Failed to parse AI response JSON: {e}")
                     ai_short_caption = ''
                     ai_long_caption = ''
                     ai_tags = []
+                    valid_ai_subjects = []
 
                 # Determine final values based on provided filters
                 if filter_title:
@@ -817,35 +1133,64 @@ class CompoidClient:
                                 break
 
                 # Safe helper function to extract ratings with fallback defaults
-                def get_rating(ratings_list, item_name, default=5):
-                    """Safely get a rating value with a default fallback."""
+                def get_rating(ratings_list, item_name, default=1.0):
+                    """Safely get a rating value with a default fallback (0-1 scale)."""
                     try:
                         return next(item['value'] for item in ratings_list if item['itemName'] == item_name)
                     except (StopIteration, KeyError, TypeError):
                         return default
 
-                content_string = read_imgfile['choices'][0]['message']['content']
+                content_string = self._vlm_content(read_ratingsfile)
                 content_data = json.loads(content_string)
+                # The VLM can answer in three shapes: a bare ratings array,
+                # a plain object with 'contentAccessRatings', or a tool-call
+                # shape with an 'arguments' envelope - unwrap whichever it
+                # uses.
+                if isinstance(content_data, list):
+                    content_ratings = content_data
+                else:
+                    if isinstance(content_data, dict):
+                        _args = content_data.get('arguments')
+                        if isinstance(_args, str):
+                            try:
+                                _args = json.loads(_args)
+                            except (json.JSONDecodeError, ValueError):
+                                _args = None
+                        if isinstance(_args, dict):
+                            content_data = _args
+                    _ratings = (
+                        content_data.get('contentAccessRatings')
+                        if isinstance(content_data, dict)
+                        else None
+                    )
+                    # Safely extract contentAccessRatings (0-1 scale)
+                    content_ratings = (
+                        _ratings if isinstance(_ratings, list) else []
+                    )
+                general_weights = get_rating(content_ratings, 'General', 9)
+                sensitive_weights = get_rating(content_ratings, 'Sensitive', 0)
+                proprietary_weights = get_rating(content_ratings, 'Proprietary', 0)
+                open_access_weights = get_rating(content_ratings, 'Open Access', 0)
+                private_weights = get_rating(content_ratings, 'Private', 0)
 
-                # Safely extract contentRatings with defaults
-                content_ratings = content_data.get('contentRatings', [])
-                general_weights = get_rating(content_ratings, 'General', 8)
-                sensitive_weights = get_rating(content_ratings, 'Sensitive', 2)
-                questionable_weights = get_rating(content_ratings, 'Questionable', 1)
-                explicit_weights = get_rating(content_ratings, 'Explicit', 1)
-                educational_weights = get_rating(content_ratings, 'Educational', 5)
-                inspirational_weights = get_rating(content_ratings, 'Inspirational', 5)
-                informational_weights = get_rating(content_ratings, 'Informational', 5)
-                violence_weights = get_rating(content_ratings, 'Violence', 1)
-                entertaining_weights = get_rating(content_ratings, 'Entertaining', 5)
-                promotional_weights = get_rating(content_ratings, 'Promotional', 1)
-                
+
                 # Determine content class safely
                 if content_ratings:
                     highest_item = max(content_ratings, key=lambda x: x.get('value', 0))
                     content_class = highest_item.get('itemName', 'General')
                 else:
-                    content_class = 'General'
+                    # No ratings in the VLM response (e.g. it echoed the
+                    # schema instead of rating the content). Fail closed
+                    # instead of defaulting to General/public: classify as
+                    # 'Unknown' so classify_content maps it to a restricted
+                    # record rather than publishing un-evaluated content.
+                    logger.warning(
+                        f"VLM ratings response has no contentAccessRatings "
+                        f"(unusable response), failing closed to restricted: "
+                        f"{str(content_data)[:300]}"
+                    )
+                    content_class = 'Unknown'
+                content_class_id, content_class_title = classify_content(content_class)
 
                 limit = 5
                 creators_dict = {}
@@ -876,7 +1221,32 @@ class CompoidClient:
                             count += 1
                         else:
                             break
-                    
+
+                limit = 5
+                subjects_dict = {}
+                count = 0
+                # Determine effective subjects: explicit filter_subjects wins; else VLM-derived
+                effective_subjects = filter_subjects if filter_subjects else (valid_ai_subjects or None)
+                if effective_subjects and isinstance(effective_subjects, list) and not filter_subjects:
+                    logger.info(f"Using {len(valid_ai_subjects)} VLM-classified subjects: {valid_ai_subjects}")
+                # Convert list to dict format for template
+                if isinstance(effective_subjects, list):
+                    for subject in effective_subjects[:limit]:
+                        if subject and subject != DEFAULT_SUBJECT:
+                            subjects_dict[subject] = None
+                elif isinstance(effective_subjects, dict):
+                    for key, value in effective_subjects.items():
+                        if count < limit:
+                            subjects_dict[key] = value
+                            count += 1
+                        else:
+                            break
+                # Anchor map: subject name -> URL anchor fragment. Prefer the live
+                # API anchor (handles punctuated subjects like "Agriculture, forestry,
+                # and fisheries" -> Agriculture_forestry_and_fisheries), else naive
+                # spaces->underscores.
+                subject_map = {subject: (subjects_dict[subject] or subject_anchors.get(subject) or subject.replace(" ", "_")) for subject in subjects_dict}
+                
                 API_ENDPOINT = f"{config.repo_api_base_url}/records"
                 headers = {"Content-Type": "application/json", 'Authorization': f"Bearer {config.repo_api_key}"}
                 uploadfileheaders = {"Content-Type": "application/octet-stream", 'Authorization': f"Bearer {config.repo_api_key}"}
@@ -894,10 +1264,12 @@ class CompoidClient:
                     versions_url = upddraftresponse['hits']['hits'][0]['links']['versions']
                     versionsreq = requests.post(versions_url, headers=headers)                   
                     draftresponse = versionsreq.json()
+                    if 'links' not in draftresponse:
+                        raise ValueError(f"Invenio version creation failed (HTTP {versionsreq.status_code}): {str(draftresponse)[:1000]}")
 
-                    data = uploadtemplate.render(file_name=file_name, short_caption=caption_llama32_short, medium_caption=caption_llama32_medium, long_caption=caption_qwen25vl_long, short_alt_caption=caption_cogvlm_short, long_alt_caption=caption_cogvlm_long, default_preview=default_preview, youtube_video_id=youtube_video_id, references=references_dict,
-                            content_class=content_class, general_weights=general_weights, sensitive_weights=sensitive_weights, questionable_weights=questionable_weights, explicit_weights=explicit_weights, keywords=keywords_dict, community_keywords=community_keywords, publication_date=publication_date, update_date=update_date, creators=creators_dict,
-                            educational_weights=educational_weights, inspirational_weights=inspirational_weights, informational_weights=informational_weights, violence_weights=violence_weights, entertaining_weights=entertaining_weights, promotional_weights=promotional_weights, default_reference=default_reference, resource_type=resource_type, resourcetype=resourcetype)
+                    data = uploadtemplate.render(file_name=file_name, short_caption=caption_llama32_short, long_caption=caption_qwen25vl_long, short_alt_caption=caption_cogvlm_short, long_alt_caption=caption_cogvlm_long, default_preview=default_preview, youtube_video_id=youtube_video_id, references=references_dict,
+                            content_class=content_class, content_class_id=content_class_id, content_class_title=content_class_title, general_weights=general_weights, sensitive_weights=sensitive_weights, keywords=keywords_dict, community_restricted=community_restricted, content_public=content_class_id == 'public', community_keywords=community_keywords, publication_date=publication_date, update_date=update_date, creators=creators_dict,
+                            proprietary_weights=proprietary_weights, open_access_weights=open_access_weights, private_weights=private_weights, default_reference=default_reference, subjects=subjects_dict, subject_map=subject_map, default_subject=DEFAULT_SUBJECT, default_subject_map=DEFAULT_SUBJECT_MAP, resource_type=resource_type, resourcetype=resourcetype)
                     draft_url = draftresponse['links']['self']
                     publish_url = draftresponse['links']['publish']
                     files_url = draftresponse['links']['files']
@@ -927,11 +1299,23 @@ class CompoidClient:
                 else:
                     reviewtemplate = env.get_template('compoid-reviewtemplate.json')
                     metadatareview = reviewtemplate.render(community=community)
-                    data = uploadtemplate.render(file_name=file_name, short_caption=caption_llama32_short, medium_caption=caption_llama32_medium, long_caption=caption_qwen25vl_long, short_alt_caption=caption_cogvlm_short, long_alt_caption=caption_cogvlm_long, default_preview=default_preview, youtube_video_id=youtube_video_id, references=references_dict,
-                            content_class=content_class, general_weights=general_weights, sensitive_weights=sensitive_weights, questionable_weights=questionable_weights, explicit_weights=explicit_weights, keywords=keywords_dict, community_keywords=community_keywords, publication_date=publication_date, update_date=update_date, creators=creators_dict,
-                            educational_weights=educational_weights, inspirational_weights=inspirational_weights, informational_weights=informational_weights, violence_weights=violence_weights, entertaining_weights=entertaining_weights, promotional_weights=promotional_weights, default_reference=default_reference, resource_type=resource_type, resourcetype=resourcetype)
+                    data = uploadtemplate.render(file_name=file_name, short_caption=caption_llama32_short, long_caption=caption_qwen25vl_long, short_alt_caption=caption_cogvlm_short, long_alt_caption=caption_cogvlm_long, default_preview=default_preview, youtube_video_id=youtube_video_id, references=references_dict,
+                            content_class=content_class, content_class_id=content_class_id, content_class_title=content_class_title, general_weights=general_weights, sensitive_weights=sensitive_weights, keywords=keywords_dict, community_restricted=community_restricted, content_public=content_class_id == 'public', community_keywords=community_keywords, publication_date=publication_date, update_date=update_date, creators=creators_dict,
+                            proprietary_weights=proprietary_weights, open_access_weights=open_access_weights, private_weights=private_weights, default_reference=default_reference, subjects=subjects_dict, subject_map=subject_map, default_subject=DEFAULT_SUBJECT, default_subject_map=DEFAULT_SUBJECT_MAP, resource_type=resource_type, resourcetype=resourcetype)
                     draftreq = requests.post(API_ENDPOINT, data=data, headers=headers)
                     draftresponse = draftreq.json()
+
+                    if 'links' not in draftresponse:
+                        body = str(draftresponse)[:1000]
+                        extra = ""
+                        if "Not a valid value" in body:
+                            extra = (
+                                "\nHint: a field failed enum validation. 'resource_type' must be one of: "
+                                "analysis, image, video, audio, publication, document, software, project, dataset, "
+                                "presentation, workflow, tutorial, other; 'subjects' must be display names from "
+                                "https://www.compoid.com/subjects (max 5)."
+                            )
+                        raise ValueError(f"Invenio rejected draft creation (HTTP {draftreq.status_code}): {body}{extra}")
 
                     draft_url = draftresponse['links']['self']
                     review_url = draftresponse['links']['review']
@@ -980,17 +1364,18 @@ class CompoidClient:
                 return True, record_id
 
             except httpx.HTTPStatusError as e:
-                error_msg = f"HTTPStatusError Failed to create a record ({e.response.status_code}): {e.response.text}"
+                error_msg = f"Failed to create a record ({e.response.status_code}): {e.response.text}{_hint_for(e.response.status_code)}"
                 logger.error(error_msg)
-                return False, None
+                raise ValueError(error_msg)
             except httpx.RequestError as e:
-                error_msg = f"RequestError Failed to create a record: {str(e)}"
+                error_msg = f"Network error while creating a record: {str(e)} (check network/API reachability and retry)"
                 logger.error(error_msg)
-                return False, None
+                raise ValueError(error_msg)
             except OSError as e:
-                error_msg = f"Failed to create a record: {str(e)}"
+                error_msg = (f"File error while creating a record: {str(e)} "
+                             f"(check the file exists on the MCP server host, or use a data URI / /projects/ path)")
                 logger.error(error_msg)
-                return False, None
+                raise ValueError(error_msg)
         
         finally:
             # Clean up temporary files created from base64 content
@@ -1009,6 +1394,7 @@ class CompoidClient:
         filter_title: Optional[str] = None,
         filter_description: Optional[str] = None,
         filter_references: Optional[list[str]] = None,
+        filter_subjects: Optional[list[str]] = None,
         filter_keywords: Optional[list[str]] = None,
         filter_resource_type: Optional[str] = None
     ) -> Dict[str, Any]:
@@ -1027,6 +1413,7 @@ class CompoidClient:
             filter_title: Record title (optional)
             filter_description: Record description (optional)
             filter_references: List of references (optional)
+            filter_subjects: List of subject display names (optional - keeps existing subjects if not provided, https://www.compoid.com/subjects)
             filter_keywords: List of keywords (optional)
             filter_resource_type: Resource type ID (optional)
         Returns:
@@ -1041,7 +1428,12 @@ class CompoidClient:
             existing_record = await self.get_works(work_id=work_id)
 
             if not existing_record:
-                return False, None
+                error_msg = (
+                    f"Record '{work_id}' not found. Use a published record PID "
+                    f"(e.g. '4171t-rc787'); drafts are not addressable until published."
+                )
+                logger.error(error_msg)
+                raise ValueError(error_msg)
 
             # Step 2: Create new draft version from existing record
             # POST /api/records/{id}/versions
@@ -1061,8 +1453,12 @@ class CompoidClient:
                 if communities_response.get('hits', {}).get('hits'):
                     community_id = communities_response['hits']['hits'][0]['id']
             if not community_id:
-                logger.error(f"Could not determine community_id for record {work_id}")
-                return False, None
+                error_msg = (
+                    f"Could not determine the community for record {work_id} (no community "
+                    f"association found on the record). Pass community_id to set one explicitly."
+                )
+                logger.error(error_msg)
+                raise ValueError(error_msg)
 
             logger.debug(f"Creating new draft version from record: {work_id}")
             async with self._rate_limiter:
@@ -1136,6 +1532,13 @@ class CompoidClient:
             else:
                 existing_refs = existing_metadata.get("references", [])
                 final_references = [ref.get("reference", "") for ref in existing_refs if ref.get("reference")]
+
+            # Extract subjects from existing metadata
+            if filter_subjects is not None:
+                final_subjects = filter_subjects
+            else:
+                existing_subjects = existing_metadata.get("subjects", [])
+                final_subjects = [subj.get("subject", "") for subj in existing_subjects if subj.get("subject")]
             
             final_resource_type = filter_resource_type if filter_resource_type is not None else existing_metadata.get("resource_type", {}).get("id", "other")
             
@@ -1239,9 +1642,18 @@ class CompoidClient:
                 communitydict = json.loads(rendered_json_str_s)
                 community = communitydict.get(community, "") or None
                 if community is None:
-                    error_msg = f"Community {community_id} not found: {str(e)}"
+                    error_msg = (
+                        f"Community '{community_id}' not found. Use a valid community slug, "
+                        f"a community UUID, or a home community slug 'user-<id>'."
+                    )
                     logger.error(error_msg)
-                    return False, None
+                    raise ValueError(error_msg)
+            # The community here is a UUID (resolved from the record's parent), so the
+            # user-<id> slug prefix can't be tested; check visibility via the API.
+            # Home communities are restricted and require restricted records, otherwise
+            # the version publish fails: "A public record cannot be included in a
+            # restricted community." Fail open to public on lookup errors.
+            _, community_restricted = resolve_community_visibility(community)
             # Convert lists to dicts for template
             creators_dict = {}
             if isinstance(final_creators, list):
@@ -1256,6 +1668,20 @@ class CompoidClient:
                     references_dict[reference] = None
             elif isinstance(final_references, dict):
                 references_dict = dict(list(final_references.items())[:5])
+
+            # Convert subjects to dicts for template (dedupe the default, which
+            # the template always appends)
+            subjects_dict = {}
+            if isinstance(final_subjects, list):
+                for subject in final_subjects[:5]:
+                    if subject and subject != DEFAULT_SUBJECT:
+                        subjects_dict[subject] = None
+            elif isinstance(final_subjects, dict):
+                for subject in list(final_subjects.keys())[:5]:
+                    if subject and subject != DEFAULT_SUBJECT:
+                        subjects_dict[subject] = final_subjects[subject]
+            # Anchor map: subject name -> URL anchor fragment (spaces -> underscores)
+            subject_map = {subject: (subjects_dict[subject] or subject.replace(" ", "_")) for subject in subjects_dict}
             
             keywords_dict = {}
             if isinstance(final_keywords, list):
@@ -1283,30 +1709,28 @@ class CompoidClient:
                     return int(float(rating_str) * 10)
                 except (ValueError, TypeError):
                     return int(default * 10)
-            
-            general_weights = get_rating_weight('general', 0.8)
-            sensitive_weights = get_rating_weight('sensitive', 0.2)
-            questionable_weights = get_rating_weight('questionable', 0.1)
-            explicit_weights = get_rating_weight('explicit', 0.1)
-            educational_weights = get_rating_weight('educational', 0.5)
-            inspirational_weights = get_rating_weight('inspirational', 0.5)
-            informational_weights = get_rating_weight('informational', 0.5)
-            violence_weights = get_rating_weight('violence', 0.1)
-            entertaining_weights = get_rating_weight('entertaining', 0.5)
-            promotional_weights = get_rating_weight('promotional', 0.1)
+
+            general_weights = get_rating_weight('general', 0.5)
+            sensitive_weights = get_rating_weight('sensitive', 0.0)
+            proprietary_weights = get_rating_weight('proprietary', 0.0)
+            open_access_weights = get_rating_weight('open_access', 0.0)
+            private_weights = get_rating_weight('private', 0.0)
             
             # Determine content class from highest rating
             if content_ratings:
                 max_rating_type = max(
-                    ['general', 'sensitive', 'questionable', 'explicit', 'educational', 'inspirational', 'informational', 'violence', 'entertaining', 'promotional'],
+                    ['general', 'sensitive', 'proprietary', 'open_access', 'private'],
                     key=lambda x: float(content_ratings.get(x, '0'))
                 )
                 content_class = max_rating_type.capitalize()
             else:
-                content_class = 'General'
+                # No ratings stored on the existing record - fail closed
+                # instead of defaulting to General/public (Unknown maps to
+                # restricted via classify_content).
+                content_class = 'Unknown'
+            content_class_id, content_class_title = classify_content(content_class)
             
             caption_llama32_short = final_title or "Updated Record"
-            caption_llama32_medium = work_id
             caption_qwen25vl_long = final_description or "Metadata update"
             caption_cogvlm_short = f"Record {work_id}"
             caption_cogvlm_long = final_description or "Metadata update"
@@ -1316,7 +1740,6 @@ class CompoidClient:
             data = uploadtemplate.render(
                 file_name=file_name,
                 short_caption=caption_llama32_short,
-                medium_caption=caption_llama32_medium,
                 long_caption=caption_qwen25vl_long,
                 short_alt_caption=caption_cogvlm_short,
                 long_alt_caption=caption_cogvlm_long,
@@ -1324,22 +1747,25 @@ class CompoidClient:
                 youtube_video_id=youtube_video_id,
                 references=references_dict,
                 content_class=content_class,
+                content_class_id=content_class_id,
+                content_class_title=content_class_title,
                 general_weights=general_weights,
                 sensitive_weights=sensitive_weights,
-                questionable_weights=questionable_weights,
-                explicit_weights=explicit_weights,
+                proprietary_weights=proprietary_weights,
+                open_access_weights=open_access_weights,
+                private_weights=private_weights,
                 keywords=keywords_dict,
+                community_restricted=community_restricted,
+                content_public=content_class_id == 'public',
                 community_keywords=community_keywords,
                 publication_date=publication_date,
                 update_date=update_date,
                 creators=creators_dict,
-                educational_weights=educational_weights,
-                inspirational_weights=inspirational_weights,
-                informational_weights=informational_weights,
-                violence_weights=violence_weights,
-                entertaining_weights=entertaining_weights,
-                promotional_weights=promotional_weights,
                 default_reference=default_reference,
+                subjects=subjects_dict,
+                subject_map=subject_map,
+                default_subject=DEFAULT_SUBJECT,
+                default_subject_map=DEFAULT_SUBJECT_MAP,
                 resource_type=final_resource_type,
                 resourcetype=resourcetype
             )
@@ -1381,21 +1807,21 @@ class CompoidClient:
             return True, record_id
         
         except httpx.HTTPStatusError as e:
-            error_msg = f"HTTPStatusError Failed to modify record ({e.response.status_code}): {e.response.text}"
+            error_msg = f"Failed to modify record {work_id} ({e.response.status_code}): {e.response.text}{_hint_for(e.response.status_code)}"
             logger.error(error_msg)
-            return False, None
+            raise ValueError(error_msg)
         except httpx.RequestError as e:
-            error_msg = f"RequestError Failed to modify record: {str(e)}"
+            error_msg = f"Network error while modifying record {work_id}: {str(e)} (check network/API reachability and retry)"
             logger.error(error_msg)
-            return False, None
+            raise ValueError(error_msg)
         except OSError as e:
-            error_msg = f"Failed to modify record: {str(e)}"
+            error_msg = f"File error while modifying record {work_id}: {str(e)}"
             logger.error(error_msg)
-            return False, None
+            raise ValueError(error_msg)
         except Exception as e:
-            error_msg = f"Unexpected error modifying record: {str(e)}"
+            error_msg = f"Unexpected error modifying record {work_id}: {str(e)}"
             logger.error(error_msg)
-            return False, None
+            raise ValueError(error_msg)
 
     async def create_community(
         self,
@@ -1542,3 +1968,41 @@ class CompoidClient:
             put_resp = await self._client.put(put_url, content=_json.dumps(current), headers=headers)
             put_resp.raise_for_status()
             return put_resp.json()
+
+    async def delete_record(self, work_id: str) -> Dict[str, Any]:
+        """Delete a published record via DELETE /api/records/{work_id}.
+
+        The InvenioRDM API returns 204 No Content on success (the record is
+        tombstoned and drops out of search). Only published records are
+        addressable - drafts have no PID until published.
+
+        Args:
+            work_id: published record PID (e.g. '4171t-rc787')
+
+        Returns:
+            {"deleted": True, "work_id": work_id} on success.
+            Raises Exception with an actionable hint on 403/404/other errors.
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use async context manager.")
+
+        url = f"{config.repo_api_base_url}/records/{work_id}"
+        headers = {
+            "Authorization": f"Bearer {config.repo_api_key}",
+        }
+
+        async with self._rate_limiter:
+            response = await self._client.delete(url, headers=headers)
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                error_msg = f"Compoid API error ({e.response.status_code}): {e.response.text}{_hint_for(e.response.status_code)}"
+                logger.error(error_msg)
+                raise Exception(error_msg)
+
+            if response.status_code == 204:
+                return {"deleted": True, "work_id": work_id}
+            try:
+                return {"deleted": True, "work_id": work_id, **response.json()}
+            except Exception:
+                return {"deleted": True, "work_id": work_id}

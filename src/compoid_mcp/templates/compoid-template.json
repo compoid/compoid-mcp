@@ -4,20 +4,20 @@
         "active": false,
         "reason": null
       },
-      "files": "public",
-      "record": "public",
-      "status": "open"
+      "files": "{{ 'restricted' if (community_restricted or not content_public) else 'public' }}",
+      "record": "{{ 'restricted' if (community_restricted or not content_public) else 'public' }}",
+      "status": "{{ 'restricted' if (community_restricted or not content_public) else 'open' }}"
     },
     "custom_fields": {
       "rdm:classification": {
-        "id": "{{ content_class|lower }}",
+        "id": "{{ content_class_id }}",
         "title": {
-          "en": "{{ content_class }}"
+          "en": "{{ content_class_title }}"
         }
       }
     },
     "files": {
-        "default_preview": "{{ image_name }}",
+        "default_preview": "{{ default_preview }}",
         "enabled": true
     },
     "metadata": {
@@ -52,30 +52,17 @@
           }
         ],
         "subjects": [
+          {%- for subject in subjects %}
           {
-            "id": "https://www.compoid.com/index/subjects/Artificial_Intelligence",
+            "id": "https://www.compoid.com/subjects#{{ subject_map[subject] }}",
             "scheme": "Subjects",
-            "subject": "Artificial Intelligence"
+            "subject": "{{ subject }}"
           },
+          {%- endfor %}
           {
-            "id": "https://www.compoid.com/index/subjects/Machine_Learning",
+            "id": "https://www.compoid.com/subjects#{{ default_subject_map }}",
             "scheme": "Subjects",
-            "subject": "Machine Learning"
-          },
-          {
-            "id": "https://www.compoid.com/index/subjects/Computer_Vision_and_Pattern_Recognition",
-            "scheme": "Subjects",
-            "subject": "Computer_Vision and Pattern Recognition"
-          },
-          {
-            "id": "https://www.compoid.com/index/subjects/Computation_and_Language",
-            "scheme": "Subjects",
-            "subject": "Computation and Language"
-          },
-          {
-            "id": "https://www.compoid.com/index/subjects/Neural_and_Evolutionary_Computing",
-            "scheme": "Subjects",
-            "subject": "Neural and Evolutionary Computing"
+            "subject": "{{ default_subject }}"
           }
         ],
         "creators": [
@@ -87,9 +74,9 @@
               "type": "personal"
             },
             "role": {
-              "id": "creator",
+              "id": "author",
               "title": {
-                "en": "Creator"
+                "en": "Author"
               }
             }
           },
@@ -107,7 +94,7 @@
               "type": "personal"
             },
             "role": {
-              "id": "aimodel",
+              "id": "ai-model",
               "title": {
                 "en": "AI Model"
               }
@@ -143,9 +130,9 @@
               }
             },
             "resource_type": {
-              "id": "vlm",
+              "id": "project",
               "title": {
-                "en": "VLM"
+                "en": "Project"
               }
             },
             "scheme": "url"
@@ -156,20 +143,9 @@
               "id": "cc-by-sa-4.0"
             }
         ],
-        "additional_descriptions": [
-          {
-            "description": "<p><strong>title (short caption):</strong> Qwen;&nbsp; <strong>description (long caption):</strong> Qwen; <strong>comments:</strong> GLM</p>",
-            "type": {
-              "id": "table-of-contents",
-              "title": {
-                "en": "Table of contents"
-              }
-            }
-          }
-        ],
         "additional_titles": [
           {
-            "title": "0.{{ general_weights }}0000",
+            "title": "0.{{ general_weights }}0",
             "type": {
               "id": "general",
               "title": {
@@ -178,7 +154,25 @@
             }
           },
           {
-            "title": "0.{{ sensitive_weights }}0000",
+            "title": "0.{{ open_access_weights }}0",
+            "type": {
+              "id": "open",
+              "title": {
+                "en": "Open Access"
+              }
+            }
+          },
+          {
+            "title": "0.{{ private_weights }}0",
+            "type": {
+              "id": "private",
+              "title": {
+                "en": "Private"
+              }
+            }
+          },
+          {
+            "title": "0.{{ sensitive_weights }}0",
             "type": {
               "id": "sensitive",
               "title": {
@@ -187,74 +181,11 @@
             }
           },
           {
-            "title": "0.{{ questionable_weights }}0000",
+            "title": "0.{{ proprietary_weights }}0",
             "type": {
-              "id": "questionable",
+              "id": "proprietary",
               "title": {
-                "en": "Questionable"
-              }
-            }
-          },
-          {
-            "title": "0.{{ explicit_weights }}0000",
-            "type": {
-              "id": "explicit",
-              "title": {
-                "en": "Explicit"
-              }
-            }
-          },
-          {
-            "title": "0.{{ educational_weights }}0000",
-            "type": {
-              "id": "educational",
-              "title": {
-                "en": "Educational"
-              }
-            }
-          },
-          {
-            "title": "0.{{ inspirational_weights }}0000",
-            "type": {
-              "id": "inspirational",
-              "title": {
-                "en": "Inspirational"
-              }
-            }
-          },
-          {
-            "title": "0.{{ informational_weights }}0000",
-            "type": {
-              "id": "informational",
-              "title": {
-                "en": "Informational"
-              }
-            }
-          },
-          {
-            "title": "0.{{ violence_weights }}0000",
-            "type": {
-              "id": "violence",
-              "title": {
-                "en": "Violence"
-              }
-            }
-          },
-          {
-            "title": "0.{{ entertaining_weights }}0000",
-            "type": {
-              "id": "entertaining",
-              "title": {
-                "en": "Entertaining"
-              }
-            }
-          },
-          {
-            "title": "0.{{ promotional_weights }}0000",
-            "type": {
-              "id": "promotional",
-              "title": {
-                "en": "Promotional"
+                "en": "Proprietary"
               }
             }
           }

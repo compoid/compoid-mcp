@@ -14,7 +14,7 @@ class CompoidConfig:
         self.repo_api_base_url: str = os.getenv("COMPOID_REPO_API_URL", "https://www.compoid.com/api")
         self.ai_api_base_url: str = os.getenv("COMPOID_AI_API_URL", "https://api.compoid.com/v1")
         self.upload_server_url: str = os.getenv("COMPOID_UPLOAD_URL", "https://mcps.compoid.com/upload")
-        self.ai_model: str = os.getenv("COMPOID_AI_MODEL", "Qwen3.5-27B-FP8")
+        self.ai_model: str = os.getenv("COMPOID_AI_MODEL", "Qwen")
         
         # API keys: Can be set from env vars (COMPOID_REPO_API_KEY) or HTTP headers (X-Compoid-Repo-Key)
         # HTTP headers take precedence when using MCP proxy with user-specific credentials

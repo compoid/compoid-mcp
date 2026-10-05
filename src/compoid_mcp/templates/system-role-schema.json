@@ -1,6 +1,6 @@
 {
- "name": "get_content_ratings",
- "description": "Get the current content ratings from an image.",
+ "name": "get_content_raitings",
+ "description": "Get the current content acess rating from file.",
  "parameters": {
   "type": "object",
   "properties": {
@@ -9,7 +9,7 @@
      "description": "The image content category",
      "enum": ["{{ communityid }}"]
     },
-   "contentRatings": {
+   "contentAccessRatings": {
     "type": "array",
     "description": "List of items within this section",
     "items": {
@@ -17,12 +17,12 @@
      "properties": {
       "itemName": {
        "type": "string",
-       "description": "content raiting item name",
-       "enum": ["General", "Sensitive", "Questionable", "Explicit", "Educational", "Inspirational", "Informational", "Violence", "Entertaining", "Promotional"]
+       "description": "content acess item name",
+       "enum": ["General", "Sensitive", "Proprietary", "Open Access", "Private"]
       },
       "value": {
        "type": "integer",
-       "description": "content raiting value from 1 to 9"
+       "description": "content acess rating value from 0 to 9"
       }
      }
     }
