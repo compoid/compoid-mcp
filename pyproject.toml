@@ -2,7 +2,7 @@
 name = "compoid-mcp"
 version = "1.0.0"
 description = "MCP Server for Compoid AI repository"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "mcp>=1.0.0",
     "httpx>=0.28.1", 
@@ -42,6 +42,7 @@ dev = [
     "pyyaml>=6.0.0",
     "python-frontmatter>=1.1.0",
     "markdown>=3.5.0",
+    "pdftotext>=4.0.0",
     
     # Async Support
     "aiofiles>=23.0.0",
@@ -65,5 +66,5 @@ line-length = 88
 select = ["E", "F", "I", "N", "W"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 strict = true

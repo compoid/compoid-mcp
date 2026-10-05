@@ -13,6 +13,29 @@ import httpx
 from compoid_mcp.client import CompoidClient
 from compoid_mcp.config import config
 
+
+_RESOURCE_TYPE_VALUES = (
+    "analysis, image, video, audio, publication, document, software, project, dataset, "
+    "presentation, workflow, tutorial, other"
+)
+
+
+def _diagnose_error(message: str) -> str:
+    """Append actionable hints to error text so agents can self-correct from failures."""
+    m = message
+    if "Not a valid value" in m and "Hint:" not in m:
+        m += (
+            f"\nHint: an enum field is invalid - 'resource_type' must be one of: "
+            f"{_RESOURCE_TYPE_VALUES}; 'subjects' must be existing subject display names from "
+            f"https://www.compoid.com/subjects (max 5)."
+        )
+    elif "Permission denied" in m and "Hint:" not in m:
+        m += (
+            "\nHint: check that the API token's user is a member/owner of the target community "
+            "(home communities: use the 'user-<id>' slug of the token's own user)."
+        )
+    return m
+
 def format_work_summary(work: Dict[str, Any]) -> str:
     """Format a work into a readable summary."""
     title = work.get("metadata", {}).get("title", 'N/A')
@@ -128,7 +151,7 @@ def format_community_summary(community: Dict[str, Any]) -> str:
 # Tool definitions
 SEARCH_WORKS_TOOL = Tool(
     name="Compoid_search_records",
-    description="Search for records (images, videos, papers, articles, analysis) in Compoid",
+    description="Search for records (images, videos, publications, documents, analysis) in Compoid",
     inputSchema={
         "type": "object",
         "properties": {
@@ -175,7 +198,7 @@ SEARCH_WORKS_TOOL = Tool(
             },
             "resource_type": {
                 "type": "string",
-                "enum": ["image", "publication", "video", "dataset", "audio", "presentation", "other", "quantitativeanalysis", "technicalanalysis", "fundamentalanalysis", "software", "workflow", "model", "lesson", "tutorial", "aimodel", "llm", "vlm", "quantmodel", "aiagent"],
+                "enum": ["analysis", "image", "video", "audio", "publication", "document", "software", "project", "dataset", "presentation", "workflow", "tutorial", "other"],
                 "description": "Filter records by resource type"
             },
             "file_type": {
@@ -296,39 +319,78 @@ DOWNLOAD_PAPER_TOOL = Tool(
 
 CREATE_RECORD_TOOL = Tool(
     name="Compoid_create_record",
-    description="Create a new Compoid record (images, videos, papers, articles, analysis).",
+    description=(
+        "Create a new Compoid record (image, video, document, publication, project, analysis) "
+        "and submit it to a community for review.\n"
+        "Provide complete metadata: 'creators' must be non-empty, and 'keywords', 'title', "
+        "'description' and 'resource_type' should all be set - thin records are hard to discover "
+        "and are a common cause of failed or rejected uploads."
+    ),
     inputSchema={
         "type": "object",
         "properties": {
             "community_id": {
                 "type": "string",
-                "description": "Compoid community ID (e.g., 'f1658ee7-0c55-4839-8b24-ebaf56d3dff9')"
+                "description": (
+                    "Target community: a community slug (e.g. 'physics', 'mathematics' - browse "
+                    "https://www.compoid.com/communities or use Compoid_search_communities), a "
+                    "community UUID, or a personal home-community slug 'user-<id>'."
+                )
             },
             "file_upload": {
                 "type": "string",
-                "description": "File to upload from local path"
+                "description": (
+                    "The file to attach. Accepted: (1) a data URI 'data:<mime>;base64,<b64>' - use "
+                    "this for client-side files (base64-encode them first); (2) a path on the MCP "
+                    "server host such as '/projects/...' or '/tmp/...' (e.g. the path returned by "
+                    "Compoid_upload_file). Plain client-local paths are NOT accessible to the "
+                    "server - upload the file with Compoid_upload_file first and reuse the path it "
+                    "returns."
+                )
             },
             "creators": {
                 "type": "array",
                 "items": {
                     "type": "string"
                 },
-                "description": "Array of Authors or AI-Models associated with the record (required)"
+                "description": (
+                    "Authors / AI models associated with the record. REQUIRED and must be "
+                    "non-empty (e.g. ['John Doe']). For AI-generated content, include the "
+                    "model name as a co-creator (e.g. ['Qwen'])."
+                )
             },
             "keywords": {
                 "type": "array",
                 "items": {
                     "type": "string"
                 },
-                "description": "Array of keywords or tags associated with the record (optional)"
+                "description": (
+                    "Keywords / tags (strongly recommended): without them the record is nearly "
+                    "undiscoverable. The community's default tag is added automatically."
+                )
             },
             "title": {
                 "type": "string",
-                "description": "Record title"
+                "description": "Record title (strongly recommended - clear and specific)."
             },
             "description": {
                 "type": "string",
-                "description": "Record description"
+                "description": (
+                    "Free-text description / abstract (strongly recommended): what the record is, "
+                    "why it matters, and how it was produced."
+                )
+            },
+            "subjects": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                },
+                "description": (
+                    "Subject display names, max 5 (e.g. ['Artificial Intelligence']). Must match "
+                    "existing subject names (browse https://www.compoid.com/subjects); invalid "
+                    "names cause a 400 'Not a valid value.' Default when omitted: 'Artificial "
+                    "Intelligence'."
+                )
             },
             "references": {
                 "type": "array",
@@ -339,8 +401,13 @@ CREATE_RECORD_TOOL = Tool(
             },
             "resource_type": {
                 "type": "string",
-                "enum": ["image", "video", "audio", "publication", "dataset", "presentation", "quantitativeanalysis", "technicalanalysis", "fundamentalanalysis", "software", "model", "aimodel", "mcp", "sector", "quantmodel", "aiagent", "workflow", "lesson", "tutorial", "other"],
-                "description": "Record resource type, the default is image"
+                "enum": ["analysis", "image", "video", "audio", "publication", "document", "software", "project", "dataset", "presentation", "workflow", "tutorial", "other"],
+                "description": (
+                    "Record resource type. Must be one of the enum values above - any other value "
+                    "is rejected with 400 'Not a valid value.' When omitted it is inferred from "
+                    "the file MIME type (image->image, video->video, text/PDF/Office->publication, "
+                    "audio->audio, else other)."
+                )
             },
         },
         "required": ["file_upload", "community_id", "creators"]
@@ -349,17 +416,30 @@ CREATE_RECORD_TOOL = Tool(
 
 UPDATE_RECORD_TOOL = Tool(
     name="Compoid_update_record",
-    description="Update an existing Compoid record. Can update metadata only or replace the file and metadata.",
+    description=(
+        "Update an existing Compoid record (creates a new version, pending review). Can update "
+        "metadata only or replace the file and metadata. Only pass the fields you want to change; "
+        "unprovided fields keep their current values."
+    ),
     inputSchema={
         "type": "object",
         "properties": {
             "work_id": {
                 "type": "string",
-                "description": "Compoid record ID (e.g., '4171t-rc787') or OAI of the record to update (required)"
+                "description": (
+                    "Compoid record PID (e.g. '4171t-rc787'), full record URL, or OAI of the "
+                    "record to update (required). Drafts have no PID until published - only "
+                    "published records can be updated."
+                )
             },
             "file_upload": {
                 "type": "string",
-                "description": "File to upload from local path (optional - only needed if replacing the file)"
+                "description": (
+                    "Replacement file (optional - only when replacing the file). Accepted: a data "
+                    "URI 'data:<mime>;base64,<b64>' or a path on the MCP server host "
+                    "('/projects/...', '/tmp/...', e.g. from Compoid_upload_file). Client-local "
+                    "paths are not accessible - upload with Compoid_upload_file first."
+                )
             },
             "creators": {
                 "type": "array",
@@ -373,7 +453,7 @@ UPDATE_RECORD_TOOL = Tool(
                 "items": {
                     "type": "string"
                 },
-                "description": "Array of keywords or tags associated with the record (optional)"
+                "description": "Array of keywords or tags (optional)"
             },
             "title": {
                 "type": "string",
@@ -382,6 +462,17 @@ UPDATE_RECORD_TOOL = Tool(
             "description": {
                 "type": "string",
                 "description": "Record description (optional)"
+            },
+            "subjects": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                },
+                "description": (
+                    "Subject display names, max 5 (e.g. ['Artificial Intelligence']). Must match "
+                    "existing subject names (https://www.compoid.com/subjects); invalid names "
+                    "cause a 400 'Not a valid value.' (optional)"
+                )
             },
             "references": {
                 "type": "array",
@@ -392,8 +483,11 @@ UPDATE_RECORD_TOOL = Tool(
             },
             "resource_type": {
                 "type": "string",
-                "enum": ["image", "video", "audio", "publication", "dataset", "presentation", "quantitativeanalysis", "technicalanalysis", "fundamentalanalysis", "software", "model", "aimodel", "mcp", "sector", "quantmodel", "aiagent", "workflow", "lesson", "tutorial", "other"],
-                "description": "Record resource type (optional)"
+                "enum": ["analysis", "image", "video", "audio", "publication", "document", "software", "project", "dataset", "presentation", "workflow", "tutorial", "other"],
+                "description": (
+                    "Record resource type (optional). Must be one of the enum values - any other "
+                    "value is rejected with 400 'Not a valid value.'"
+                )
             },
         },
         "required": ["work_id"]
@@ -424,6 +518,29 @@ UPLOAD_FILE_TOOL = Tool(
             }
         },
         "required": ["file_data"]
+    }
+)
+
+DELETE_RECORD_TOOL = Tool(
+    name="Compoid_delete_record",
+    description=(
+        "Delete a published Compoid record. Irreversible - the record is tombstoned "
+        "and drops out of all search results. Use for cleaning up test records. "
+        "Only published records are addressable (drafts have no PID until published)."
+    ),
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "work_id": {
+                "type": "string",
+                "description": (
+                    "Published record PID to delete (e.g. '4171t-rc787'), a full record "
+                    "URL (https://www.compoid.com/records/<pid>), or its OAI. The token's "
+                    "user must be the record's creator or a community owner."
+                )
+            }
+        },
+        "required": ["work_id"]
     }
 )
 
@@ -848,6 +965,15 @@ async def create_record(client: CompoidClient, arguments: Dict[str, Any]) -> Lis
     file_upload = arguments["file_upload"]
     community_id = arguments["community_id"]
     creators = arguments.get("creators")
+    if not creators or not any(str(c).strip() for c in creators if c is not None):
+        return [TextContent(
+            type="text",
+            text=(
+                "Error: 'creators' is required and must be a non-empty list of author / AI-model "
+                "names (e.g. [\"Orlin Alexandrov\", \"Qwen\"]). Re-submit the request with "
+                "'creators' set."
+            )
+        )]
 
     filter_title = None
     if title := arguments.get("title"):
@@ -860,6 +986,10 @@ async def create_record(client: CompoidClient, arguments: Dict[str, Any]) -> Lis
     filter_references = None
     if references := arguments.get("references"):
         filter_references = references
+
+    filter_subjects = None
+    if subjects := arguments.get("subjects"):
+        filter_subjects = subjects
 
     filter_keywords = None
     if keywords := arguments.get("keywords"):
@@ -902,7 +1032,7 @@ async def create_record(client: CompoidClient, arguments: Dict[str, Any]) -> Lis
     print("Creating new record")
     
     try:
-        success = await client.upload_record(community_id=community_id, file_upload=file_upload, creators=creators, filter_title=filter_title, filter_description=filter_description, filter_references=filter_references, filter_keywords=filter_keywords, filter_resource_type=filter_resource_type)
+        success = await client.upload_record(community_id=community_id, file_upload=file_upload, creators=creators, filter_title=filter_title, filter_description=filter_description, filter_references=filter_references, filter_subjects=filter_subjects, filter_keywords=filter_keywords, filter_resource_type=filter_resource_type)
         if success[0] and len(success) == 3:
             created_work_id = success[1]
             draft_url = success[2]
@@ -958,12 +1088,17 @@ async def create_record(client: CompoidClient, arguments: Dict[str, Any]) -> Lis
                      f"Creators: {creators}\n"
                      f"Title: {filter_title}\n"
                      f"Description: {filter_description}\n"
-                     f"Resource Type: {filter_resource_type}"
+                     f"Resource Type: {filter_resource_type}\n\n"
+                     f"Fix and re-submit: 'creators' must be a non-empty list; provide "
+                     f"'keywords', 'title' and 'description'; 'resource_type' must be one of: "
+                     f"{_RESOURCE_TYPE_VALUES}; 'subjects' must be existing display names from "
+                     f"https://www.compoid.com/subjects (max 5); 'community_id' must be a valid "
+                     f"community slug, UUID, or 'user-<id>'."
             )]
     except Exception as e:
         return [TextContent(
             type="text",
-            text=f"Error creating record: {str(e)}"
+            text=f"Error creating record: {_diagnose_error(str(e))}"
         )]
 
 
@@ -981,8 +1116,19 @@ async def update_record(client: CompoidClient, arguments: Dict[str, Any]) -> Lis
     filter_title = arguments.get("title")
     filter_description = arguments.get("description")
     filter_references = arguments.get("references")
+    filter_subjects = arguments.get("subjects")
     filter_keywords = arguments.get("keywords")
     filter_resource_type = arguments.get("resource_type")
+    if not any([filter_file_upload, filter_title, filter_description, filter_keywords,
+                filter_creators, filter_references, filter_subjects, filter_resource_type]):
+        return [TextContent(
+            type="text",
+            text=(
+                f"Error: no fields to update for record {work_id}. Pass at least one of: "
+                "title, description, keywords, creators, subjects, references, resource_type, "
+                "or file_upload (to replace the file) - an update with no changes is a no-op."
+            )
+        )]
    
     # If file_upload is provided, validate it
     if filter_file_upload:
@@ -1014,6 +1160,7 @@ async def update_record(client: CompoidClient, arguments: Dict[str, Any]) -> Lis
             filter_title=filter_title,
             filter_description=filter_description,
             filter_references=filter_references,
+            filter_subjects=filter_subjects,
             filter_keywords=filter_keywords,
             filter_resource_type=filter_resource_type
         )
@@ -1043,12 +1190,17 @@ async def update_record(client: CompoidClient, arguments: Dict[str, Any]) -> Lis
         else:
             return [TextContent(
                 type="text",
-                text=f"Failed to update record {work_id}"
+                text=f"Failed to update record {work_id}\n\n"
+                     f"Fix and re-submit: 'work_id' must be a published record PID (drafts have no "
+                     f"PID until published); pass at least one field to change (title, description, "
+                     f"keywords, creators, subjects, references, resource_type, file_upload); "
+                     f"'resource_type' must be one of: {_RESOURCE_TYPE_VALUES}; 'subjects' must be "
+                     f"existing display names from https://www.compoid.com/subjects (max 5)."
             )]
     except Exception as e:
         return [TextContent(
             type="text",
-            text=f"Error updating record: {str(e)}"
+            text=f"Error updating record: {_diagnose_error(str(e))}"
         )]
 
 
@@ -1210,4 +1362,174 @@ async def update_community(client: CompoidClient, arguments: Dict[str, Any]) -> 
         return [TextContent(
             type="text",
             text=f"Error updating community: {str(e)}"
+        )]
+
+SEARCH_COLLECTIONS_TOOL = Tool(
+    name="Compoid_search_collections",
+    description="Search for collections within a Compoid community (e.g. Publications, Datasets, subject collections)",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "community_id": {
+                "type": "string",
+                "description": "Compoid community ID (e.g., 'f1658ee7-0c55-4839-8b24-ebaf56d3dff9') or slug"
+            },
+            "query": {
+                "type": "string",
+                "description": "Search term matched against collection titles and tree names (optional - omit to list all collections)"
+            },
+            "limit": {
+                "type": "integer",
+                "description": "Maximum number of collections to return (default 20)"
+            }
+        },
+        "required": ["community_id"]
+    }
+)
+
+GET_COLLECTION_RECORDS_TOOL = Tool(
+    name="Compoid_get_collection_records",
+    description="Get the records that belong to a specific Compoid collection",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "collection_id": {
+                "type": "integer",
+                "description": "Numeric Compoid collection ID (e.g., 4 - from Compoid_search_collections)"
+            },
+            "query": {
+                "type": "string",
+                "description": "Additional search query, AND-ed on top of the collection's own scope (optional)"
+            },
+            "limit": {
+                "type": "integer",
+                "description": "Maximum number of records to return (default 10)"
+            }
+        },
+        "required": ["collection_id"]
+    }
+)
+
+
+async def search_collections(client: CompoidClient, arguments: Dict[str, Any]) -> List[TextContent]:
+    """Search for collections within a Compoid community."""
+    community = arguments["community_id"]
+    query = arguments.get("query")
+    limit = arguments.get("limit", 20)
+
+    try:
+        collections = await client.get_collection_trees(community)
+
+        if not collections:
+            return [TextContent(
+                type="text",
+                text=f"No collections found in community: {community}"
+            )]
+
+        if query:
+            needle = query.lower()
+            collections = [
+                c for c in collections
+                if needle in (c.get("title") or "").lower()
+                or needle in (c.get("tree") or "").lower()
+                or needle in (c.get("slug") or "").lower()
+            ]
+
+        total = len(collections)
+        collections = collections[:limit]
+
+        if not collections:
+            return [TextContent(
+                type="text",
+                text=f"No collections matching '{query}' in community: {community}"
+            )]
+
+        content = f"Found {total} collections in community '{community}'\n\n"
+        for i, c in enumerate(collections, 1):
+            content += f"{i}. {c.get('title')}"
+            if c.get("tree") and c.get("tree") != c.get("title"):
+                content += f" (tree: {c.get('tree')})"
+            content += f"\n   id={c.get('id')} slug={c.get('slug')}"
+            # Note: the collection-trees API's num_records counter is stale
+            # (returns 0 even for populated collections), so it is
+            # intentionally not displayed here. Use
+            # Compoid_get_collection_records for the real record list.
+            content += "\n"
+        content += ("\nUse Compoid_get_collection_records with the collection id to list its records.")
+
+        return [TextContent(type="text", text=content)]
+
+    except Exception as e:
+        return [TextContent(
+            type="text",
+            text=f"Error searching collections: {str(e)}"
+        )]
+
+
+async def get_collection_records(client: CompoidClient, arguments: Dict[str, Any]) -> List[TextContent]:
+    """Get the records of a specific Compoid collection."""
+    collection_id = arguments["collection_id"]
+    query = arguments.get("query")
+    limit = arguments.get("limit", 10)
+
+    try:
+        response = await client.get_collection_records(
+            collection_id=collection_id,
+            q=query,
+            size=limit
+        )
+
+        results = response.get("hits", {}).get("hits", [])
+        meta = response.get("hits", {})
+
+        if not results:
+            suffix = f" matching '{query}'" if query else ""
+            return [TextContent(
+                type="text",
+                text=f"No records found in collection {collection_id}{suffix}"
+            )]
+
+        content = f"Found {meta.get('total', len(results))} records in collection {collection_id}:\n\n"
+
+        for i, work in enumerate(results, 1):
+            content += f"{i}. {format_work_summary(work)}\n"
+
+        return [TextContent(type="text", text=content)]
+
+    except Exception as e:
+        return [TextContent(
+            type="text",
+            text=f"Error getting collection records: {str(e)}"
+        )]
+
+
+async def delete_record(client: CompoidClient, arguments: Dict[str, Any]) -> List[TextContent]:
+    """Delete a published Compoid record."""
+    work_id = arguments.get("work_id", "").strip()
+
+    # Normalize full record URLs and OAI strings to the bare PID
+    if work_id.startswith("https://www.compoid.com/records"):
+        work_id = work_id.rstrip("/").split("/")[-1]
+    elif work_id.startswith("oai:www.compoid.com"):
+        work_id = work_id.split(":")[-1]
+
+    if not work_id:
+        return [TextContent(
+            type="text",
+            text="Error: 'work_id' is required and must be a published record PID (e.g. '4171t-rc787')."
+        )]
+
+    try:
+        await client.delete_record(work_id)
+        return [TextContent(
+            type="text",
+            text=(
+                f"Successfully deleted record: {work_id} (HTTP 204). "
+                "The record is tombstoned and no longer appears in search results."
+            )
+        )]
+    except Exception as e:
+        return [TextContent(
+            type="text",
+            text=f"Error deleting record {work_id}: {_diagnose_error(str(e))}"
         )]
