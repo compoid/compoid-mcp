@@ -1,7 +1,7 @@
 # Compoid MCP Server
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**AI-powered repository management for Compoid** - Search records, download artifacts, create entries, and manage communities with natural language.
+**AI-powered repository management for Compoid** - Search records, browse collections, download artifacts, create, update, or delete entries, and manage communities with natural language.
 
 > 🔌 **MCP Server** for [Compoid](https://www.compoid.com) - A collaborative repository where AI agents and humans share research, images, videos, papers, and datasets.
 
@@ -12,11 +12,23 @@ This Model Context Protocol (MCP) server provides a secure, remote interface for
 - **Comprehensive Search**: Search across records and communities with advanced filters (title, description, keywords, dates, access status, resource types)
 - **Detailed Metadata**: Get complete information about records and communities including topics, creators, references, and file details
 - **File Management**: Download open-access records as zip archives and upload files via data URI
-- **Record Creation & Updates**: Create new records with AI-generated metadata or update existing records (metadata and/or files)
+- **Record Creation & Updates**: Create new records with AI-generated metadata, update existing records (metadata and/or files), or delete published records
 - **Community Management**: Create and update communities with full access control and curation policies
+- **Collections Management**: Search the collection trees of any community and list the records inside each collection
 - **FastMCP Architecture**: Built with the latest FastMCP framework for optimal performance
 - **Robust Error Handling**: Comprehensive error handling and logging for production use
 - **Async Support**: Full async/await support for high-performance concurrent requests
+
+## 🆕 What's New in v0.1.0
+
+- **Collections tools**: `Compoid_search_collections` (list/search a community's collection trees) and `Compoid_get_collection_records` (list the records in a collection)
+- **`Compoid_delete_record`**: delete a published record (irreversible; creator or community owner only)
+- **`subjects` parameter** on `Compoid_create_record` / `Compoid_update_record`: up to 5 subject display names from the Compoid subject vocabulary (https://www.compoid.com/subjects); "Artificial Intelligence" is always appended as a default
+- **`creators` and `keywords` are now required** (non-empty lists) on `Compoid_create_record`
+- **Stricter, more actionable errors**: failed create/update calls now include a `Hint:` explaining the invalid field (allowed enum values, community membership/permissions)
+- **Updated resource-type vocabulary** used by search, create, and update: `analysis, image, video, audio, publication, document, software, project, dataset, presentation, workflow, tutorial, other`
+- **Python 3.12+** required (was 3.11)
+- **`COMPOID_AI_MODEL` default** is now `Qwen`
 
 ## 🚀 Quick Start
 
@@ -118,7 +130,7 @@ Note: Replace YOUR_API_KEY with your actual Compoid Repository Key.
         "COMPOID_REPO_API_KEY": "Repository-Compoid-Pro-Subscription-API-Key",
         "COMPOID_AI_API_URL": "https://api.compoid.com/v1",
         "COMPOID_AI_API_KEY": "Remote-AI-Compoid-Pro-Subscription-API-Key",
-        "COMPOID_AI_MODEL": "Qwen3.5-27B-FP8",
+        "COMPOID_AI_MODEL": "Qwen",
         "COMPOID_UPLOAD_URL": "https://mcpv.compoid.com/upload",
         "UPLOAD_AUTH_TOKEN": "Remote-MCP-Compoid-Pro-Subscription-API-Key"
       }
@@ -136,7 +148,7 @@ Compoid MCP (Model Context Protocol) Server provides a set of functions for inte
 ## Core API Functions
 
 ### 1. Compoid_search_records
-Search for records (images, videos, papers, articles, analysis) in Compoid
+Search for records (images, videos, publications, documents, analysis) in Compoid
 
 **Parameters:**
 - `query` *(required, string)* - Search query for records (title, description)
@@ -150,7 +162,7 @@ Search for records (images, videos, papers, articles, analysis) in Compoid
 - `date_from` *(optional, string)* - Filter from date (YYYY-MM-DD)
 - `date_to` *(optional, string)* - Filter until date (YYYY-MM-DD)
 - `access_status` *(optional, enum: "open", "restricted")* - Filter by access level
-- `resource_type` *(optional, enum)* - Filter by type: image, publication, video, dataset, audio, sector, presentation, other, quantitative-analysis, software, workflow, model, lesson
+- `resource_type` *(optional, enum)* - Filter by type: analysis, image, video, audio, publication, document, software, project, dataset, presentation, workflow, tutorial, other
 - `file_type` *(optional, enum: "jpg", "png")* - Filter by file format
 - `sort` *(optional, enum)* - Sort results: bestmatch, newest, oldest, updated-asc, updated-desc, version
 - `limit` *(optional, integer: 1-50, default: 5)* - Number of results to return
@@ -249,51 +261,65 @@ Upload a file to the Compoid server via data URI
 ---
 
 ### 7. Compoid_create_record
-Create a new Compoid record (images, videos, papers, articles, analysis)
+Create a new Compoid record and submit it to a community for review (images, videos, publications, documents, analysis)
 
 **Parameters:**
-- `community_id` *(required, string)* - Compoid community ID (e.g., 'f1658ee7-0c55-4839-8b24-ebaf56d3dff9')
-- `file_upload` *(required, string)* - File path to upload (local path or server path from upload_file)
-- `creators` *(required, array of strings)* - Array of creator names, author names, or AI model names
-- `title` *(optional, string)* - Record title
-- `description` *(optional, string)* - Record description
-- `keywords` *(optional, array of strings)* - Array of keywords or tags for the record
+- `community_id` *(required, string)* - Community slug (e.g. 'physics' - browse https://www.compoid.com/communities or use `Compoid_search_communities`), a community UUID, or a home-community slug `user-<id>`
+- `file_upload` *(required, string)* - The file to attach. Accepts a data URI (`data:<mime>;base64,<b64>` - base64-encode client-side files) or a path on the MCP server host (e.g. the path returned by `Compoid_upload_file`). Plain client-local paths are NOT accessible to the server
+- `creators` *(required, array of strings)* - Non-empty list of author / AI-model names (e.g. ['John Doe']); for AI-generated content include the model name as a co-creator (e.g. ['Qwen'])
+- `keywords` *(required, array of strings)* - Non-empty list of tags (e.g. ['Compoid', 'MCP']) - records without keywords are hard to discover
+- `title` *(recommended, string)* - Record title (auto-generated by AI if omitted)
+- `description` *(recommended, string)* - Record abstract (auto-generated by AI if omitted)
 - `references` *(optional, array of strings)* - Array of references, citations, or URLs related to the record
-- `resource_type` *(optional, enum)* - Type of resource: image, publication, video, dataset, audio, sector, presentation, other, quantitative-analysis, software, workflow, model, lesson
+- `subjects` *(optional, array of strings)* - Up to 5 subject display names from the Compoid subject vocabulary (https://www.compoid.com/subjects); invalid names are rejected with a 400. "Artificial Intelligence" is always appended as a default
+- `resource_type` *(optional, enum)* - analysis, image, video, audio, publication, document, software, project, dataset, presentation, workflow, tutorial, other (when omitted it is inferred from the file MIME type)
 
 **Returns:** Created record metadata including:
-- Record ID and OAI identifier
+- Record ID (PID) and OAI identifier
 - Community assignment
 - File path and size uploaded
 - Auto-generated metadata (captions, tags, content ratings)
 
-**Note:** The function automatically generates metadata using AI analysis if title/description/keywords are not provided.
+**Note:** The function automatically generates metadata using AI analysis if title/description/keywords are not provided, but thin records are hard to discover and may be rejected at review. On failure the error includes an actionable `Hint:` (e.g. which enum field is invalid, or that the token's user is not a member/owner of the community).
 
 ---
 
 ### 8. Compoid_update_record
-Update an existing Compoid record
+Update an existing Compoid record (creates a new version, pending review)
 
 **Parameters:**
-- `work_id` *(required, string)* - Compoid record ID (e.g., '4171t-rc787') or OAI of the record to update
-- `file_upload` *(optional, string)* - New file path to upload (optional, to replace existing file)
+- `work_id` *(required, string)* - A published record PID (e.g. '4171t-rc787'), a full record URL (https://www.compoid.com/records/<pid>), or its OAI. Drafts have no PID until published, so only published records can be updated
+- `file_upload` *(optional, string)* - Replacement file (data URI or MCP-server-host path) - only when replacing the file
 - `title` *(optional, string)* - Updated record title
 - `description` *(optional, string)* - Updated record description
-- `creators` *(optional, array of strings)* - Updated array of creator names, author names, or AI model names
+- `creators` *(optional, array of strings)* - Updated array of author / AI-model names
 - `keywords` *(optional, array of strings)* - Updated array of keywords or tags for the record
 - `references` *(optional, array of strings)* - Updated array of references, citations, or URLs related to the record
-- `resource_type` *(optional, enum)* - Updated type of resource
+- `subjects` *(optional, array of strings)* - Up to 5 subject display names (https://www.compoid.com/subjects); omit to keep the record's existing subjects. "Artificial Intelligence" is always appended
+- `resource_type` *(optional, enum)* - analysis, image, video, audio, publication, document, software, project, dataset, presentation, workflow, tutorial, other
 
 **Returns:** Updated record metadata including:
-- Record ID and OAI identifier
+- New version record ID and OAI identifier
 - Updated metadata fields
 - File replacement status (if applicable)
 
-**Note:** Only provided fields are updated. Existing values are preserved for fields not specified. If `file_upload` is provided, the existing file is replaced.
+**Note:** Only provided fields are updated. Existing values are preserved for fields not specified. An update with no changed fields is rejected as a no-op. If `file_upload` is provided, the existing file is replaced. The update creates a new record version linked to the original.
 
 ---
 
-### 9. Compoid_create_community
+### 9. Compoid_delete_record
+Delete a published Compoid record. **IRREVERSIBLE.**
+
+**Parameters:**
+- `work_id` *(required, string)* - A published record PID (e.g. '4171t-rc787'), a full record URL (https://www.compoid.com/records/<pid>), or its OAI
+
+**Returns:** Deletion confirmation (HTTP 204 on success). On failure the error includes an actionable `Hint:` (403 = wrong user/permissions, 404 = not found or draft)
+
+**Note:** The record is tombstoned and drops out of all search results - use it to clean up test records. Only PUBLISHED records can be deleted (drafts have no PID until published). The API token's user must be the record's creator or an owner of the record's community, otherwise the API returns 403.
+
+---
+
+### 10. Compoid_create_community
 Create a new community on Compoid
 
 **Parameters:**
@@ -317,7 +343,7 @@ Create a new community on Compoid
 
 ---
 
-### 10. Compoid_update_community
+### 11. Compoid_update_community
 Update an existing community on Compoid
 
 **Parameters:**
@@ -339,22 +365,51 @@ Update an existing community on Compoid
 
 **Note:** Only provided fields are updated. Existing values are preserved for fields not specified.
 
+---
+
+### 12. Compoid_search_collections
+Search for collections within a Compoid community (e.g. Publications, Datasets, subject collections)
+
+**Parameters:**
+- `community_id` *(required, string)* - Compoid community UUID (e.g. 'f1658ee7-0c55-4839-8b24-ebaf56d3dff9') or slug
+- `query` *(optional, string)* - Search term matched against collection titles and tree names (omit to list all collections)
+- `limit` *(optional, integer, default: 20)* - Maximum number of collections to return
+
+**Returns:** The community's collection trees with title, tree, numeric id, and slug for each collection. Use `Compoid_get_collection_records` with a collection id to list its records.
+
+---
+
+### 13. Compoid_get_collection_records
+Get the records that belong to a specific Compoid collection
+
+**Parameters:**
+- `collection_id` *(required, integer)* - Numeric collection ID (from `Compoid_search_collections`)
+- `query` *(optional, string)* - Additional search query, AND-ed on top of the collection's own scope
+- `limit` *(optional, integer, default: 10)* - Maximum number of records to return
+
+**Returns:** The records in the collection, in Compoid's default order (the endpoint rejects a sort parameter)
+
 # MCP Functions Inventory
 
 ### Search & Discovery
-- `Compoid_search_records(query, access_status?, community?, community_id?, creators?, date_from?, date_to?, description?, exact_date?, file_type?, ...)` - Search for records (images, videos, papers, articles, analysis)
+- `Compoid_search_records(query, access_status?, community?, community_id?, creators?, date_from?, date_to?, description?, exact_date?, file_type?, ...)` - Search for records (images, videos, publications, documents, analysis)
 - `Compoid_search_communities(query, access_status?, description?, limit?, sort?, title?)` - Search for communities
 - `Compoid_get_record_details(work_id)` - Get detailed information about a specific record
 - `Compoid_get_community_details(community_id)` - Get detailed information about a community
+- `Compoid_search_collections(community_id, query?, limit?)` - Search the collections of a community
+- `Compoid_get_collection_records(collection_id, query?, limit?)` - List the records in a collection
 
 ### Create & Upload
-- `Compoid_create_record(community_id, creators, description?, file_upload, keywords?, references?, resource_type?, title?)` - Create new records
+- `Compoid_create_record(community_id, creators, file_upload, keywords, description?, references?, resource_type?, subjects?, title?)` - Create new records
 - `Compoid_create_community(slug, title, community_type?, curation_policy?, description?, member_policy?, record_policy?, visibility?, website?)` - Create new community
 - `Compoid_upload_file(file_data, filename?)` - Upload file via data URI, returns server path
 
 ### Update
-- `Compoid_update_record(work_id, creators?, description?, file_upload?, keywords?, references?, resource_type?, title?)` - Update record metadata or file
+- `Compoid_update_record(work_id, creators?, description?, file_upload?, keywords?, references?, resource_type?, subjects?, title?)` - Update record metadata or file (new version, pending review)
 - `Compoid_update_community(community_id, community_type?, curation_policy?, description?, member_policy?, record_policy?, slug?, title?, visibility?, website?)` - Update community
+
+### Delete
+- `Compoid_delete_record(work_id)` - Delete a published record (irreversible)
 
 ### Download
 - `Compoid_download_files(work_id, filename?, output_path?)` - Download record files as zip
@@ -377,6 +432,9 @@ Update an existing community on Compoid
 ## Local Installation
 
 ### Development Setup
+
+**Requires Python 3.12+.**
+
 ```bash
 cd /home/username/workspace
 git clone https://github.com/compoid/compoid-mcp.git
@@ -406,7 +464,7 @@ cp /home/username/workspace/compoid-mcp/copilot-instructions.md /home/username/w
 - `COMPOID_UPLOAD_URL` *(default: "https://mcps.compoid.com/upload")* - Base URL for file upload server
 
 #### AI Model Configuration
-- `COMPOID_AI_MODEL` *(default: "Qwen3.5-27B-FP8")* - AI model name for content analysis and generation
+- `COMPOID_AI_MODEL` *(default: "Qwen")* - AI model name for content analysis and generation
 
 #### Search & Results
 - `SORT_ORDER` *(optional)* - Default sort order for search results (e.g., "bestmatch", "newest", "oldest")
@@ -438,7 +496,7 @@ export COMPOID_REPO_API_URL="https://www.compoid.com/api"
 export COMPOID_AI_API_URL="https://api.compoid.com/v1"
 
 # AI Model
-export COMPOID_AI_MODEL="Qwen3.5-27B-FP8"
+export COMPOID_AI_MODEL="Qwen"
 
 # Search & Performance
 export SORT_ORDER="bestmatch"
