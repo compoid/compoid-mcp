@@ -10,6 +10,7 @@ import base64
 import tempfile
 import subprocess
 import httpx
+from pathlib import Path
 
 from compoid_mcp.config import config
 from compoid_mcp.logutil import logger
@@ -20,6 +21,10 @@ import re
 import time
 from datetime import date, timedelta
 from jinja2 import Environment, FileSystemLoader
+
+# Templates ship inside the installed package (wheel/sdist); resolve them
+# relative to this file rather than the current working directory.
+_TEMPLATES_DIR = str(Path(__file__).resolve().parent / "templates")
 
 
 CLASSIFICATION_MAP = {
@@ -864,7 +869,7 @@ class CompoidClient:
                 }
 
             try:
-                file_loader = FileSystemLoader('src/compoid_mcp/templates')
+                file_loader = FileSystemLoader(_TEMPLATES_DIR)
                 env = Environment(loader=file_loader)
                 env.filters['jsonify'] = json.dumps
                 dictf = env.get_template('communitydict-extended.json')
@@ -1568,7 +1573,7 @@ class CompoidClient:
                         clean_file_upload = clean_file_name.replace(' ', '_')[:50]
                     
                     # Create file metadata
-                    filestemplate_loader = FileSystemLoader('src/compoid_mcp/templates')
+                    filestemplate_loader = FileSystemLoader(_TEMPLATES_DIR)
                     filestemplate_env = Environment(loader=filestemplate_loader)
                     filestemplate = filestemplate_env.get_template('compoid-filestemplate.json')
                     metadatafiles = filestemplate.render(file_name=clean_file_upload)
@@ -1620,7 +1625,7 @@ class CompoidClient:
                             logger.warning(f"Failed to clean up temporary file {file_path}: {e}")
             
             # Step 6: Update metadata using template
-            file_loader = FileSystemLoader('src/compoid_mcp/templates')
+            file_loader = FileSystemLoader(_TEMPLATES_DIR)
             env = Environment(loader=file_loader)
             env.filters['jsonify'] = json.dumps
             

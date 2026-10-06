@@ -104,7 +104,18 @@ For VSCode Copilot, add the following to your {workspace}/.vscode/mcp.json
 ```
 Note: Replace YOUR_API_KEY with your actual Compoid Repository Key.
 
-### Option 4: Using local pip installation
+### Option 4: Local install from PyPI
+
+One-line install (published on [PyPI](https://pypi.org/project/compoid-mcp/)):
+
+```bash
+pip install compoid-mcp
+# or run without installing:
+uvx compoid-mcp
+```
+
+Then register the local stdio server:
+
 ```json
 {
   "mcpServers": {
@@ -112,15 +123,8 @@ Note: Replace YOUR_API_KEY with your actual Compoid Repository Key.
       "name": "Compoid AI Repository MCP Server",
       "disabled": false,
       "type": "stdio",
-      "command": "python",
-      "args": [
-        "-m",
-        "compoid_mcp.server"
-      ],
-      "cwd": "/home/username/workspace/compoid-mcp/src",
+      "command": "compoid-mcp",
       "env": {
-        "WORKSPACE": "/home/username/workspace/compoid-mcp/src",
-        "PYTHONPATH": "/home/username/workspace/compoid-mcp/src",
         "SORT_ORDER": "bestmatch",
         "LOG_LEVEL": "DEBUG",
         "LOG_API_REQUESTS": "true",
@@ -433,7 +437,7 @@ Get the records that belong to a specific Compoid collection
 
 ### Development Setup
 
-**Requires Python 3.12+.**
+**Requires Python 3.12+.** (Normal install: `pip install compoid-mcp` — see Option 4. The following is for development from source.)
 
 ```bash
 cd /home/username/workspace

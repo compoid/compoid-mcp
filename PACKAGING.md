@@ -54,8 +54,8 @@ python -m build --wheel    # Wheel only
 ```
 
 This creates:
-- `dist/compoid_mcp-1.0.0.tar.gz` (source distribution)
-- `dist/compoid_mcp-1.0.0-py3-none-any.whl` (wheel)
+- `dist/compoid_mcp-0.1.0.tar.gz` (source distribution)
+- `dist/compoid_mcp-0.1.0-py3-none-any.whl` (wheel)
 
 ### 2. Verify Package Contents
 
@@ -63,16 +63,16 @@ This creates:
 
 ```bash
 # List contents
-tar -tzf dist/compoid_mcp-1.0.0.tar.gz
+tar -tzf dist/compoid_mcp-0.1.0.tar.gz
 
 # Extract and inspect
-tar -xzf dist/compoid_mcp-1.0.0.tar.gz
-ls -la compoid_mcp-1.0.0/
+tar -xzf dist/compoid_mcp-0.1.0.tar.gz
+ls -la compoid_mcp-0.1.0/
 ```
 
 **Expected contents:**
 ```
-compoid_mcp-1.0.0/
+compoid_mcp-0.1.0/
 ├── PKG-INFO
 ├── pyproject.toml
 ├── README.md
@@ -92,21 +92,21 @@ compoid_mcp-1.0.0/
 
 ```bash
 # List wheel contents
-unzip -l dist/compoid_mcp-1.0.0-py3-none-any.whl
+unzip -l dist/compoid_mcp-0.1.0-py3-none-any.whl
 
 # Extract and inspect
-unzip -d compoid_mcp_wheel dist/compoid_mcp-1.0.0-py3-none-any.whl
+unzip -d compoid_mcp_wheel dist/compoid_mcp-0.1.0-py3-none-any.whl
 ls -la compoid_mcp_wheel/
 ```
 
 **Expected contents:**
 ```
-compoid_mcp-1.0.0.dist-info/
+compoid_mcp-0.1.0.dist-info/
 ├── METADATA
 ├── WHEEL
 ├── top_level.txt
 ├── RECORD
-└── compoid_mcp-1.0.0.data/
+└── compoid_mcp-0.1.0.data/
     └── scripts/
         └── compoid-mcp
 
@@ -127,17 +127,17 @@ compoid_mcp/
 pip install check-wheel-contents
 
 # Check for common issues
-check-wheel-contents dist/compoid_mcp-1.0.0-py3-none-any.whl
+check-wheel-contents dist/compoid_mcp-0.1.0-py3-none-any.whl
 
 # Check with strict mode
-check-wheel-contents -v dist/compoid_mcp-1.0.0-py3-none-any.whl
+check-wheel-contents -v dist/compoid_mcp-0.1.0-py3-none-any.whl
 ```
 
 ### 2. Validate with Twine
 
 ```bash
 # Check package metadata
-twine check dist/compoid_mcp-1.0.0.tar.gz dist/compoid_mcp-1.0.0-py3-none-any.whl
+twine check dist/compoid_mcp-0.1.0.tar.gz dist/compoid_mcp-0.1.0-py3-none-any.whl
 
 # Expected output:
 # WARNING  'requires-python' not specified.
@@ -158,7 +158,7 @@ python -m venv test_env
 source test_env/bin/activate
 
 # Install from wheel
-pip install dist/compoid_mcp-1.0.0-py3-none-any.whl
+pip install dist/compoid_mcp-0.1.0-py3-none-any.whl
 
 # Verify installation
 python -c "import compoid_mcp; print(compoid_mcp.__version__)"
@@ -173,7 +173,7 @@ python -m venv test_env2
 source test_env2/bin/activate
 
 # Install from source
-pip install dist/compoid_mcp-1.0.0.tar.gz
+pip install dist/compoid_mcp-0.1.0.tar.gz
 
 # Verify installation
 python -c "import compoid_mcp; print(compoid_mcp.__version__)"
@@ -295,7 +295,7 @@ Key configuration sections:
 ```toml
 [project]
 name = "compoid-mcp"
-version = "1.0.0"
+version = "0.1.0"
 description = "Model Context Protocol server for Compoid AI database"
 readme = "README.md"
 license = { text = "MIT" }
