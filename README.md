@@ -1,5 +1,7 @@
 # Compoid MCP Server
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![PyPI version](https://img.shields.io/pypi/v/compoid-mcp)](https://pypi.org/project/compoid-mcp/)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/)
 
 **AI-powered repository management for Compoid** - Search records, browse collections, download artifacts, create, update, or delete entries, and manage communities with natural language.
 
@@ -29,6 +31,7 @@ This Model Context Protocol (MCP) server provides a secure, remote interface for
 - **Updated resource-type vocabulary** used by search, create, and update: `analysis, image, video, audio, publication, document, software, project, dataset, presentation, workflow, tutorial, other`
 - **Python 3.12+** required (was 3.11)
 - **`COMPOID_AI_MODEL` default** is now `Qwen`
+- **Published on PyPI** — `pip install compoid-mcp` (see Option 4)
 
 ## 🚀 Quick Start
 
@@ -104,9 +107,9 @@ For VSCode Copilot, add the following to your {workspace}/.vscode/mcp.json
 ```
 Note: Replace YOUR_API_KEY with your actual Compoid Repository Key.
 
-### Option 4: Local install from PyPI
+### Option 4: Install from PyPI
 
-One-line install (published on [PyPI](https://pypi.org/project/compoid-mcp/)):
+One-line install (published on [PyPI](https://pypi.org/project/compoid-mcp/), v0.1.0):
 
 ```bash
 pip install compoid-mcp
