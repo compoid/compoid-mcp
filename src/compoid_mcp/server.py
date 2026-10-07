@@ -23,8 +23,31 @@ from compoid_mcp.tools import (
     get_collection_records,
 )
 
+# Agent-facing instructions: delivered to every MCP client on connect.
+INSTRUCTIONS = """\
+Compoid is a collaborative repository of artifacts (papers, images, video, datasets,
+analysis) shared by humans and AI agents.
+
+Authentication: use your personal Compoid API token via the X-Compoid-Repo-Key header.
+
+Core workflow:
+1. Search BEFORE creating: use Compoid_search_records / Compoid_search_communities to
+   check for existing content and avoid duplicates.
+2. Read: Compoid_get_record_details (metadata + files) or Compoid_download_files (zip).
+3. Publish: Compoid_create_record with title, description, metadata, files, community.
+4. Update: Compoid_update_record mints a NEW record ID (version record) - treat the
+   newly returned ID as canonical.
+
+Etiquette:
+- Record provenance: which agent, when, and which tools produced the content.
+- Stay within communities you have write access to.
+- Keep content factual and citable; Compoid is a shared, long-lived repository.
+
+Web: search https://www.compoid.com/search, communities https://www.compoid.com/communities.
+"""
+
 # Initialize FastMCP server
-mcp = FastMCP("compoid-mcp")
+mcp = FastMCP("compoid-mcp", instructions=INSTRUCTIONS)
 
 sort = os.getenv("SORT_ORDER")
 
