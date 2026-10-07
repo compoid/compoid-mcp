@@ -21,6 +21,12 @@ This Model Context Protocol (MCP) server provides a secure, remote interface for
 - **Robust Error Handling**: Comprehensive error handling and logging for production use
 - **Async Support**: Full async/await support for high-performance concurrent requests
 
+## 🆕 What's New in v0.1.1
+
+- **Security:** removed debug header logging that wrote the full incoming headers (including the upload Bearer token) to a local file / stderr on every request
+- **Agent-facing `instructions`:** the server now ships usage guidance with the MCP handshake, so connected agents learn the Compoid workflow (auth, search-before-create, provenance etiquette) automatically
+- **README:** new setup section covering API keys and environment variables (remote vs. self-hosted)
+
 ## 🆕 What's New in v0.1.0
 
 - **Collections tools**: `Compoid_search_collections` (list/search a community's collection trees) and `Compoid_get_collection_records` (list the records in a collection)
@@ -109,7 +115,7 @@ Note: Replace YOUR_API_KEY with your actual Compoid Repository Key.
 
 ### Option 4: Install from PyPI
 
-One-line install (published on [PyPI](https://pypi.org/project/compoid-mcp/), v0.1.0):
+One-line install (published on [PyPI](https://pypi.org/project/compoid-mcp/), v0.1.1):
 
 ```bash
 pip install compoid-mcp
@@ -138,13 +144,48 @@ Then register the local stdio server:
         "COMPOID_AI_API_URL": "https://api.compoid.com/v1",
         "COMPOID_AI_API_KEY": "Remote-AI-Compoid-Pro-Subscription-API-Key",
         "COMPOID_AI_MODEL": "Qwen",
-        "COMPOID_UPLOAD_URL": "https://mcpv.compoid.com/upload",
+        "COMPOID_UPLOAD_URL": "https://mcps.compoid.com/upload",
         "UPLOAD_AUTH_TOKEN": "Remote-MCP-Compoid-Pro-Subscription-API-Key"
       }
     }
   }
 }
 ```
+## ⚙️ Setup: API Key & Environment Variables
+
+**What you need:** a Compoid account and a repository API key. Every Compoid account automatically gets a personal API token (named `compoid-<user id>`); you can also create additional tokens from your Compoid account.
+
+**Remote mode — hosted server, no install, no env vars.** Point your agent at the hosted endpoint and send your key as a request header (this is Option 1/2 above):
+
+```json
+{
+  "mcpServers": {
+    "Compoid": {
+      "type": "http",
+      "url": "https://mcpv.compoid.com/mcp",
+      "headers": { "X-Compoid-Repo-Key": "YOUR_API_KEY" }
+    }
+  }
+}
+```
+
+**Local / self-hosted mode — installed from PyPI.** The server reads its configuration from environment variables. The only required one is your repository API key; everything else has a working default:
+
+```bash
+# required
+export COMPOID_REPO_API_KEY="your-c…-key"
+
+# optional
+export COMPOID_AI_API_KEY="your-c…-key"    # AI metadata generation
+export DOWNLOAD_PATH="$HOME/Downloads"     # where downloads land
+export EXTRACT_ARCHIVE="true"              # auto-extract downloaded zips
+export SORT_ORDER="bestmatch"              # default search sort
+```
+
+Or set the same variables in the `env` block of your MCP client config (see Option 4). The full reference — endpoints, AI model, pagination, timeouts, rate limits, logging — is in [Configuration → Environment Variables](#environment-variables) below.
+
+> **Note:** for the hosted `mcpv.compoid.com` server, per-request headers (`X-Compoid-Repo-Key`, `X-Compoid-AI-Key`, `Authorization`) take precedence over any server-side environment.
+
 # Compoid MCP Server - Available Functions
 
 ## Overview
@@ -533,17 +574,17 @@ pip install -e ".[dev]"
 python -m build
 
 # This creates:
-# - dist/compoid_mcp-1.0.0.tar.gz
-# - dist/compoid_mcp-1.0.0-py3-none-any.whl
+# - dist/compoid_mcp-0.1.1.tar.gz
+# - dist/compoid_mcp-0.1.1-py3-none-any.whl
 ```
 
 #### Package Contents Verification
 ```bash
 # Check source distribution contents
-tar -tzf dist/compoid_mcp-1.0.0.tar.gz
+tar -tzf dist/compoid_mcp-0.1.1.tar.gz
 
 # Check wheel contents  
-unzip -l dist/compoid_mcp-1.0.0-py3-none-any.whl
+unzip -l dist/compoid_mcp-0.1.1-py3-none-any.whl
 ```
 For detailed packaging instructions, see [PACKAGING.md](PACKAGING.md).
 
