@@ -924,9 +924,6 @@ async def upload_file(arguments: Dict[str, Any]) -> List[TextContent]:
     if config.proxy_token:
         headers["Authorization"] = f"Bearer {config.proxy_token}"
 
-    with open('mcp_headers.txt', 'w') as wfile:
-        wfile.write("headers: {}\n".format(headers))
- 
     try:
         async with httpx.AsyncClient(timeout=120.0) as http:
             response = await http.post(

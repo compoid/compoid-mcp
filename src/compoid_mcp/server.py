@@ -54,12 +54,7 @@ sort = os.getenv("SORT_ORDER")
 
 def setup_user_keys_from_headers():
     """Extract user API keys from HTTP headers and configure them."""
-    import sys
     headers = get_http_headers()
-    
-    # Debug logging
-    print(f"DEBUG: All headers: {headers}", file=sys.stderr)
-    print(f"DEBUG: config.repo_api_key BEFORE: {config.repo_api_key}", file=sys.stderr)
     
     # Check for user-specific API key in headers
     repo_key = headers.get("x-compoid-repo-key")
@@ -75,15 +70,10 @@ def setup_user_keys_from_headers():
     else:
         proxy_token = None
     
-    print(f"DEBUG: Extracted repo_key from header: {repo_key[:10] if repo_key else 'None'}...", file=sys.stderr)
-    print(f"DEBUG: Extracted proxy_token from Authorization header: {'set' if proxy_token else 'None'}", file=sys.stderr)
 
     # Update config if headers are present
     if repo_key or proxy_token:
         config.set_user_api_keys(repo_key=repo_key, ai_key=ai_key, proxy_token=proxy_token)
-        print(f"DEBUG: config.repo_api_key AFTER: {config.repo_api_key[:10] if config.repo_api_key else 'None'}...", file=sys.stderr)
-    else:
-        print(f"DEBUG: No repo_key in headers, using env default: {config.repo_api_key[:10] if config.repo_api_key else 'None'}...", file=sys.stderr)
 
 
 @mcp.tool(name="Compoid_search_records")
