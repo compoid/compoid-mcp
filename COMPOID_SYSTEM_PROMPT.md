@@ -2,8 +2,7 @@
 
 You are a helpful assistant with access to Compoid repository system.
 
-```json
-[
+```json[
   {
     "function_declarations": [
       {
@@ -59,21 +58,21 @@ You are a helpful assistant with access to Compoid repository system.
             "resource_type": {
               "type": "string",
               "enum": [
+                "analysis",
                 "image",
-                "publication",
                 "video",
-                "dataset",
                 "audio",
-                "sector",
-                "presentation",
-                "other",
-                "quantitative-analysis",
+                "publication",
+                "document",
                 "software",
+                "project",
+                "dataset",
+                "presentation",
                 "workflow",
-                "model",
-                "lesson"
+                "tutorial",
+                "other"
               ],
-              "description": "Filter records by resource type"
+              "description": "Filter records by resource type (must match a Compoid resource type ID)"
             },
             "file_type": {
               "type": "string",
@@ -173,7 +172,7 @@ You are a helpful assistant with access to Compoid repository system.
       },
       {
         "name": "tool_Compoid_get_community_details",
-        "description": "Get detailed information about a specific community by its ID",
+        "description": "Get detailed information about a specific community by its Compoid ID or OAI",
         "parameters": {
           "type": "object",
           "properties": {
@@ -234,24 +233,24 @@ You are a helpful assistant with access to Compoid repository system.
       },
       {
         "name": "tool_Compoid_create_record",
-        "description": "Create a new Compoid record (images, videos, papers, articles, analysis).",
+        "description": "Create a new Compoid record (images, videos, papers, articles, analysis) and submit it to a community for review.",
         "parameters": {
           "type": "object",
           "properties": {
             "community_id": {
               "type": "string",
-              "description": "Compoid community ID (e.g., 'f1658ee7-0c55-4839-8b24-ebaf56d3dff9')"
+              "description": "Compoid community: slug (e.g. 'physics' - browse https://www.compoid.com/communities or use tool_Compoid_search_communities), a community UUID, or a home-community slug 'user-<id>'"
             },
             "file_upload": {
               "type": "string",
-              "description": "File path to upload (local path or server path from upload_file)"
+              "description": "The file to attach: (1) a data URI 'data:<mime>;base64,<b64>' (base64-encode client-side files), or (2) a path on the MCP server host such as '/projects/...' (e.g. the path returned by tool_Compoid_upload_file). Plain client-local paths are NOT accessible to the server."
             },
             "creators": {
               "type": "array",
               "items": {
                 "type": "string"
               },
-              "description": "Array of creator names, author names, or AI model names"
+              "description": "Non-empty array of creator names, author names, or AI model names. For AI-generated content include the model name as a co-creator (e.g. ['Qwen'])."
             },
             "title": {
               "type": "string",
@@ -266,7 +265,7 @@ You are a helpful assistant with access to Compoid repository system.
               "items": {
                 "type": "string"
               },
-              "description": "Array of keywords or tags for the record"
+              "description": "Non-empty array of keywords or tags for the record - records without keywords are hard to discover."
             },
             "references": {
               "type": "array",
@@ -278,21 +277,28 @@ You are a helpful assistant with access to Compoid repository system.
             "resource_type": {
               "type": "string",
               "enum": [
+                "analysis",
                 "image",
-                "publication",
                 "video",
-                "dataset",
                 "audio",
-                "sector",
-                "presentation",
-                "other",
-                "quantitative-analysis",
+                "publication",
+                "document",
                 "software",
+                "project",
+                "dataset",
+                "presentation",
                 "workflow",
-                "model",
-                "lesson"
+                "tutorial",
+                "other"
               ],
-              "description": "Type of resource being uploaded"
+              "description": "Type of resource being uploaded (inferred from the file MIME type when omitted)"
+            },
+            "subjects": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Up to 5 subject display names from the Compoid subject vocabulary (https://www.compoid.com/subjects); invalid names are rejected. 'Artificial Intelligence' is always appended as a default subject."
             }
           },
           "required": [
@@ -300,21 +306,27 @@ You are a helpful assistant with access to Compoid repository system.
             "file_upload",
             "creators"
           ]
-        }
+        },
+        "required": [
+          "community_id",
+          "file_upload",
+          "creators",
+          "keywords"
+        ]
       },
       {
         "name": "tool_Compoid_update_record",
-        "description": "Update an existing Compoid record. Can update metadata only or replace both file and metadata.",
+        "description": "Update an existing Compoid record. Creates a new version (pending review); only pass the fields you want to change, unprovided fields keep their current values. Only PUBLISHED records can be updated - drafts have no PID until published.",
         "parameters": {
           "type": "object",
           "properties": {
             "work_id": {
               "type": "string",
-              "description": "Compoid record ID (e.g., '4171t-rc787') or OAI of the record to update"
+              "description": "Published record PID (e.g. '4171t-rc787'), full record URL (https://www.compoid.com/records/<pid>), or OAI of the record to update"
             },
             "file_upload": {
               "type": "string",
-              "description": "New file path to upload (optional, to replace existing file)"
+              "description": "Replacement file (data URI or MCP-server-host path) - only when replacing the file"
             },
             "title": {
               "type": "string",
@@ -348,21 +360,44 @@ You are a helpful assistant with access to Compoid repository system.
             "resource_type": {
               "type": "string",
               "enum": [
+                "analysis",
                 "image",
-                "publication",
                 "video",
-                "dataset",
                 "audio",
-                "sector",
-                "presentation",
-                "other",
-                "quantitative-analysis",
+                "publication",
+                "document",
                 "software",
+                "project",
+                "dataset",
+                "presentation",
                 "workflow",
-                "model",
-                "lesson"
+                "tutorial",
+                "other"
               ],
               "description": "Updated type of resource"
+            },
+            "subjects": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Up to 5 subject display names (https://www.compoid.com/subjects). Omit to keep the record's existing subjects; 'Artificial Intelligence' is always appended as a default."
+            }
+          },
+          "required": [
+            "work_id"
+          ]
+        }
+      },
+      {
+        "name": "tool_Compoid_delete_record",
+        "description": "Delete a published Compoid record. IRREVERSIBLE - the record is tombstoned and drops out of all search results. Use it to clean up test records. Only PUBLISHED records can be deleted - drafts have no PID until they are published. The API token's user must be the record's creator or an owner of the record's community; otherwise the API returns 403.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "work_id": {
+              "type": "string",
+              "description": "The record to delete - a published record PID (e.g. '4171t-rc787'), a full record URL (https://www.compoid.com/records/<pid>), or its OAI. On success returns a confirmation (HTTP 204); on failure the error includes an actionable hint (403 = wrong user/permissions, 404 = not found or draft)."
             }
           },
           "required": [
@@ -506,6 +541,58 @@ You are a helpful assistant with access to Compoid repository system.
           },
           "required": [
             "community_id"
+          ]
+        }
+      },
+      {
+        "name": "tool_Compoid_search_collections",
+        "description": "Search for collections within a Compoid community (e.g. Publications, Datasets, subject collections). community_id accepts a UUID or slug; omit query to list all collections.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "community_id": {
+              "type": "string",
+              "description": "Compoid community ID (UUID) or slug"
+            },
+            "query": {
+              "type": "string",
+              "description": "Search query for collection names"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 20,
+              "description": "Number of collections to return"
+            }
+          },
+          "required": [
+            "community_id"
+          ]
+        }
+      },
+      {
+        "name": "tool_Compoid_get_collection_records",
+        "description": "Get the records that belong to a specific Compoid collection. collection_id is the numeric ID from tool_Compoid_search_collections; an optional query is AND-ed on top of the collection's own scope.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "collection_id": {
+              "type": "integer",
+              "description": "Numeric collection ID from tool_Compoid_search_collections"
+            },
+            "query": {
+              "type": "string",
+              "description": "Optional search query AND-ed on top of the collection's own scope"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 10,
+              "description": "Number of records to return"
+            }
+          },
+          "required": [
+            "collection_id"
           ]
         }
       }
