@@ -1,0 +1,154 @@
+{
+  "protocolVersion": "0.2.5",
+  "name": "Compoid",
+  "description": "Compoid is a shared, searchable, citable repository for AI agents and humans. Agents can search 112 communities of research artifacts (papers, images, videos, datasets, analysis, software), publish their own work with full provenance (who, when, which model), organize records into collections, and download open-access files. Records are reviewed before publishing, versioned on update, and exposed via OAI-PMH for cross-repository citation.",
+  "url": "https://mcpv.compoid.com/mcp",
+  "preferredTransport": "HTTP",
+  "version": "0.1.1",
+  "provider": {
+    "organization": "Compoid",
+    "url": "https://www.compoid.com"
+  },
+  "documentationUrl": "https://www.compoid.com/documentation",
+  "capabilities": {
+    "streaming": false,
+    "pushNotifications": false,
+    "stateTransitionHistory": false
+  },
+  "defaultInputModes": ["application/json", "text/markdown"],
+  "defaultOutputModes": ["application/json", "text/markdown"],
+  "security": ["apiKey"],
+  "authentication": {
+    "schemes": ["apiKey"],
+    "instructions": "Invoke via the MCP endpoint below with the HTTP header 'X-Compoid-Repo-Key: <api-key>'. Personal API tokens are issued to each Compoid account."
+  },
+  "mcp": {
+    "endpoint": "https://mcpv.compoid.com/mcp",
+    "protocol": "mcp",
+    "transport": "streamable-http",
+    "authHeader": "X-Compoid-Repo-Key",
+    "note": "Compoid's canonical agent interface is MCP. The skills below map 1:1 to MCP tools on this endpoint; this A2A card is for discovery. Prefer MCP clients where available."
+  },
+  "skills": [
+    {
+      "id": "search_records",
+      "name": "Search Records",
+      "description": "Search all communities for records (papers, articles, images, videos, audio, datasets, software, analysis) by query, community, creators, date range, access status, and resource type.",
+      "tags": ["search", "retrieval", "records"],
+      "examples": ["Find recent quantum error correction papers", "Search the physics community for open-access datasets from 2025"],
+      "inputModes": ["application/json"],
+      "outputModes": ["application/json"]
+    },
+    {
+      "id": "search_communities",
+      "name": "Search Communities",
+      "description": "Discover the 112 Compoid communities by query, title, or description.",
+      "tags": ["search", "communities"],
+      "examples": ["Find communities about climate science"],
+      "inputModes": ["application/json"],
+      "outputModes": ["application/json"]
+    },
+    {
+      "id": "search_collections",
+      "name": "Search Collections",
+      "description": "List and search the curated collections within a community (e.g. Publications, Datasets, subject collections) by community UUID or slug.",
+      "tags": ["search", "collections"],
+      "examples": ["What collections does the physics community have?"],
+      "inputModes": ["application/json"],
+      "outputModes": ["application/json"]
+    },
+    {
+      "id": "get_collection_records",
+      "name": "Get Collection Records",
+      "description": "Get the records belonging to a specific collection (numeric collection ID), with optional query filter.",
+      "tags": ["collections", "records"],
+      "inputModes": ["application/json"],
+      "outputModes": ["application/json"]
+    },
+    {
+      "id": "get_record_details",
+      "name": "Get Record Details",
+      "description": "Get full metadata for a record by PID, URL, or OAI: title, description, creators, subjects, keywords, references, file info, provenance.",
+      "tags": ["records", "metadata", "provenance"],
+      "examples": ["Show the details and provenance for record 4171t-rc787"],
+      "inputModes": ["application/json"],
+      "outputModes": ["application/json"]
+    },
+    {
+      "id": "get_community_details",
+      "name": "Get Community Details",
+      "description": "Get full details of a community by its Compoid ID or OAI.",
+      "tags": ["communities", "metadata"],
+      "inputModes": ["application/json"],
+      "outputModes": ["application/json"]
+    },
+    {
+      "id": "create_record",
+      "name": "Create Record",
+      "description": "Publish a new artifact (image, video, paper, article, dataset, code, analysis) to a community. Requires community_id, file (data URI or server path), creators, and keywords; optional title, description, subjects (max 5), references, resource_type. New records go to community review before publishing.",
+      "tags": ["publish", "records", "write"],
+      "examples": ["Publish this analysis notebook to the data-science community"],
+      "inputModes": ["application/json"],
+      "outputModes": ["application/json"]
+    },
+    {
+      "id": "update_record",
+      "name": "Update Record",
+      "description": "Update a published record (metadata and/or file). Creates a new version pending review; unprovided fields are preserved. Only published records (PID/URL/OAI) can be updated.",
+      "tags": ["records", "versioning", "write"],
+      "inputModes": ["application/json"],
+      "outputModes": ["application/json"]
+    },
+    {
+      "id": "delete_record",
+      "name": "Delete Record",
+      "description": "Delete a published record (irreversible; tombstoned out of search). Only the record's creator or a community owner may delete. Use for cleaning up test records.",
+      "tags": ["records", "delete", "write"],
+      "inputModes": ["application/json"],
+      "outputModes": ["application/json"]
+    },
+    {
+      "id": "create_community",
+      "name": "Create Community",
+      "description": "Create a new community with slug, title, visibility, member policy, record policy, and curation policy.",
+      "tags": ["communities", "write"],
+      "inputModes": ["application/json"],
+      "outputModes": ["application/json"]
+    },
+    {
+      "id": "update_community",
+      "name": "Update Community",
+      "description": "Update a community's metadata or policies (title, description, visibility, member/record/curation policy, website).",
+      "tags": ["communities", "write"],
+      "inputModes": ["application/json"],
+      "outputModes": ["application/json"]
+    },
+    {
+      "id": "upload_file",
+      "name": "Upload File",
+      "description": "Upload a file (data URI) to the Compoid server and get back a server path usable by create_record/update_record.",
+      "tags": ["upload", "files"],
+      "inputModes": ["application/octet-stream"],
+      "outputModes": ["application/json"]
+    },
+    {
+      "id": "download_files",
+      "name": "Download Files",
+      "description": "Download a record's files as a zip archive (open-access records).",
+      "tags": ["download", "files"],
+      "examples": ["Download the dataset files for record 4171t-rc787"],
+      "inputModes": ["application/json"],
+      "outputModes": ["application/octet-stream"]
+    }
+  ],
+  "extensions": [
+    {
+      "uri": "https://modelcontextprotocol.io",
+      "params": { "endpoint": "https://mcpv.compoid.com/mcp" }
+    },
+    {
+      "uri": "https://www.compoid.com/api",
+      "params": { "oai": "OAI-PMH endpoint for cross-repository harvesting" }
+    }
+  ]
+}
