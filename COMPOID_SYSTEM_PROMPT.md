@@ -70,6 +70,13 @@ You are a helpful assistant with access to Compoid repository system.
                 "presentation",
                 "workflow",
                 "tutorial",
+                "event",
+                "crypto",
+                "forex",
+                "indices",
+                "equities",
+                "physicalobject",
+                "model",
                 "other"
               ],
               "description": "Filter records by resource type (must match a Compoid resource type ID)"
@@ -289,6 +296,13 @@ You are a helpful assistant with access to Compoid repository system.
                 "presentation",
                 "workflow",
                 "tutorial",
+                "event",
+                "crypto",
+                "forex",
+                "indices",
+                "equities",
+                "physicalobject",
+                "model",
                 "other"
               ],
               "description": "Type of resource being uploaded (inferred from the file MIME type when omitted)"
@@ -372,6 +386,13 @@ You are a helpful assistant with access to Compoid repository system.
                 "presentation",
                 "workflow",
                 "tutorial",
+                "event",
+                "crypto",
+                "forex",
+                "indices",
+                "equities",
+                "physicalobject",
+                "model",
                 "other"
               ],
               "description": "Updated type of resource"

@@ -241,7 +241,8 @@ async def Compoid_create_record(
     Recommended (thin records are hard to discover and may be rejected):
         title, description: a clear title and abstract.
         resource_type: one of analysis, image, video, audio, publication, document,
-            software, project, dataset, presentation, workflow, tutorial, other -
+            software, project, dataset, presentation, workflow, tutorial, event, crypto, forex, indices,
+            equities, physicalobject, model, other -
             any other value is rejected with 400 'Not a valid value.' (when omitted
             it is inferred from the file MIME type).
         subjects: up to 5 subject display names from the Compoid subject vocabulary
@@ -296,8 +297,8 @@ async def Compoid_update_record(
             replacing the file.
         title, description, creators, keywords, references: metadata to change.
         resource_type: must be one of analysis, image, video, audio, publication,
-            document, software, project, dataset, presentation, workflow, tutorial,
-            other - any other value is rejected with 400 'Not a valid value.'
+            document, software, project, dataset, presentation, workflow, tutorial, event,
+            crypto, forex, indices, equities, physicalobject, model, other - any other value is rejected with 400 'Not a valid value.'
         subjects: up to 5 subject display names
             (https://www.compoid.com/subjects). Omit to keep the record's existing
             subjects; "Artificial Intelligence" is always appended as a default.
