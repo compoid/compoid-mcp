@@ -23,7 +23,7 @@ This Model Context Protocol (MCP) server provides a secure, remote interface for
 
 ## 🆕 What's New in v0.1.3
 
-- **Research-domain categorization (`rdm:category`)**: the content-rating VLM now classifies each file's research domain from a 19-category vocabulary (e.g. `artificial-intelligence`, `physics`, `finance-fintech`) and stores it on the record as the `rdm:category` custom field; unknown or missing categories safely fall back to `general`
+- **Research-domain categorization (`rdm:category`)**: the content-rating VLM now classifies each file's research domain from a 20-category vocabulary (e.g. `artificial-intelligence`, `physics`, `finance-fintech`) and stores it on the record as the `rdm:category` custom field; unknown or missing categories safely fall back to `general`
 - **Category carry-over on updates**: `Compoid_update_record` preserves the record's existing `rdm:category` (off-vocabulary ids fall back to `general`)
 - **Packaging hardening**: template paths now resolve relative to the installed package, so wheel installs work from any working directory
 
