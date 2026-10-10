@@ -26,7 +26,6 @@ from jinja2 import Environment, FileSystemLoader
 # relative to this file rather than the current working directory.
 _TEMPLATES_DIR = str(Path(__file__).resolve().parent / "templates")
 
-
 CLASSIFICATION_MAP = {
     'general': 'public',
     'open_access': 'public',
@@ -876,8 +875,12 @@ class CompoidClient:
                 rendered_json_str_f = dictf.render()
                 communitydict = json.loads(rendered_json_str_f)
                 community = community_id.lower() if isinstance(community_id, str) else community_id
-                community_keywords = communitydict.get(community, "") or "AI-bots-playground"
-                systemroleschema = env.get_template('system-role-schema.json').render(communityid=community_keywords)
+                community_keywords = communitydict.get(community, "") or "AI & Machine Learning"
+                # Content category vocabulary (research domains): the ratings
+                # VLM call picks one id, which lands on the record as rdm:category.
+                dictcat = env.get_template('contentcategorydict.json')
+                contentcategorydict = json.loads(dictcat.render())
+                systemroleschema = env.get_template('system-role-schema.json').render(content_categories=json.dumps(list(contentcategorydict.keys())))
                 community_restricted = False
                 if len(community) != 36:
                     dicts = env.get_template('communitydict.json')
@@ -941,7 +944,7 @@ class CompoidClient:
                         "messages": [
                             {"role": "system", "content": (
                                 f"You are a content access rater. Rate the provided content and return ONLY a JSON object with exactly "
-                                f"two keys: \"contentCategory\" (the string {community_keywords}) and \"contentAccessRatings\" - an array of five "
+                                f"two keys: \"contentCategory\" (one of the content category IDs allowed in the reference schema) and \"contentAccessRatings\" - an array of five "
                                 f"objects, one per item name General, Sensitive, Proprietary, Open Access, Private, each "
                                 f"{{\"itemName\": <item name>, \"value\": <integer 0-9>}} where 9 = fully open/public and 0 = maximally "
                                 f"sensitive/restricted. Return the rating object only - do not repeat the schema, do not wrap the result "
@@ -1147,6 +1150,7 @@ class CompoidClient:
 
                 content_string = self._vlm_content(read_ratingsfile)
                 content_data = json.loads(content_string)
+                content_category_id = 'general'
                 # The VLM can answer in three shapes: a bare ratings array,
                 # a plain object with 'contentAccessRatings', or a tool-call
                 # shape with an 'arguments' envelope - unwrap whichever it
@@ -1172,6 +1176,21 @@ class CompoidClient:
                     content_ratings = (
                         _ratings if isinstance(_ratings, list) else []
                     )
+                    # Content category (research domain): must be a valid
+                    # vocabulary id; anything missing/off-vocabulary keeps
+                    # the 'general' default.
+                    _category = (
+                        content_data.get('contentCategory')
+                        if isinstance(content_data, dict)
+                        else None
+                    )
+                    if isinstance(_category, str) and _category in contentcategorydict:
+                        content_category_id = _category
+                    elif _category is not None:
+                        logger.warning(
+                            f"VLM returned invalid contentCategory {_category!r}, "
+                            f"falling back to 'general'"
+                        )
                 general_weights = get_rating(content_ratings, 'General', 9)
                 sensitive_weights = get_rating(content_ratings, 'Sensitive', 0)
                 proprietary_weights = get_rating(content_ratings, 'Proprietary', 0)
@@ -1196,6 +1215,7 @@ class CompoidClient:
                     )
                     content_class = 'Unknown'
                 content_class_id, content_class_title = classify_content(content_class)
+                content_category_title = contentcategorydict.get(content_category_id, 'General & Cross-Disciplinary')
 
                 limit = 5
                 creators_dict = {}
@@ -1273,7 +1293,7 @@ class CompoidClient:
                         raise ValueError(f"Invenio version creation failed (HTTP {versionsreq.status_code}): {str(draftresponse)[:1000]}")
 
                     data = uploadtemplate.render(file_name=file_name, short_caption=caption_llama32_short, long_caption=caption_qwen25vl_long, short_alt_caption=caption_cogvlm_short, long_alt_caption=caption_cogvlm_long, default_preview=default_preview, youtube_video_id=youtube_video_id, references=references_dict,
-                            content_class=content_class, content_class_id=content_class_id, content_class_title=content_class_title, general_weights=general_weights, sensitive_weights=sensitive_weights, keywords=keywords_dict, community_restricted=community_restricted, content_public=content_class_id == 'public', community_keywords=community_keywords, publication_date=publication_date, update_date=update_date, creators=creators_dict,
+                            content_class=content_class, content_class_id=content_class_id, content_class_title=content_class_title, content_category_id=content_category_id, content_category_title=content_category_title, general_weights=general_weights, sensitive_weights=sensitive_weights, keywords=keywords_dict, community_restricted=community_restricted, content_public=content_class_id == 'public', community_keywords=community_keywords, publication_date=publication_date, update_date=update_date, creators=creators_dict,
                             proprietary_weights=proprietary_weights, open_access_weights=open_access_weights, private_weights=private_weights, default_reference=default_reference, subjects=subjects_dict, subject_map=subject_map, default_subject=DEFAULT_SUBJECT, default_subject_map=DEFAULT_SUBJECT_MAP, resource_type=resource_type, resourcetype=resourcetype)
                     draft_url = draftresponse['links']['self']
                     publish_url = draftresponse['links']['publish']
@@ -1305,7 +1325,7 @@ class CompoidClient:
                     reviewtemplate = env.get_template('compoid-reviewtemplate.json')
                     metadatareview = reviewtemplate.render(community=community)
                     data = uploadtemplate.render(file_name=file_name, short_caption=caption_llama32_short, long_caption=caption_qwen25vl_long, short_alt_caption=caption_cogvlm_short, long_alt_caption=caption_cogvlm_long, default_preview=default_preview, youtube_video_id=youtube_video_id, references=references_dict,
-                            content_class=content_class, content_class_id=content_class_id, content_class_title=content_class_title, general_weights=general_weights, sensitive_weights=sensitive_weights, keywords=keywords_dict, community_restricted=community_restricted, content_public=content_class_id == 'public', community_keywords=community_keywords, publication_date=publication_date, update_date=update_date, creators=creators_dict,
+                            content_class=content_class, content_class_id=content_class_id, content_class_title=content_class_title, content_category_id=content_category_id, content_category_title=content_category_title, general_weights=general_weights, sensitive_weights=sensitive_weights, keywords=keywords_dict, community_restricted=community_restricted, content_public=content_class_id == 'public', community_keywords=community_keywords, publication_date=publication_date, update_date=update_date, creators=creators_dict,
                             proprietary_weights=proprietary_weights, open_access_weights=open_access_weights, private_weights=private_weights, default_reference=default_reference, subjects=subjects_dict, subject_map=subject_map, default_subject=DEFAULT_SUBJECT, default_subject_map=DEFAULT_SUBJECT_MAP, resource_type=resource_type, resourcetype=resourcetype)
                     draftreq = requests.post(API_ENDPOINT, data=data, headers=headers)
                     draftresponse = draftreq.json()
@@ -1635,6 +1655,28 @@ class CompoidClient:
             resourcetypedict = json.loads(rendered_json_str_r)
             resourcetype = resourcetypedict.get(final_resource_type, "Other")
 
+            # Load content category dict
+            dictcat = env.get_template('contentcategorydict.json')
+            contentcategorydict = json.loads(dictcat.render())
+
+            # Content category: carry over the stored rdm:category id from
+            # the existing record (the records API returns custom_fields on
+            # single-record reads). Legacy records without a category, or
+            # with an id outside the vocabulary, fall back to 'general'.
+            _existing_cf = existing_record.get("custom_fields") or {}
+            existing_category = (_existing_cf.get("rdm:category") or {}).get("id")
+            if isinstance(existing_category, str) and existing_category in contentcategorydict:
+                content_category_id = existing_category
+            else:
+                if existing_category is not None:
+                    logger.warning(
+                        f"Record {work_id} has rdm:category {existing_category!r} "
+                        f"outside the content_category vocabulary, "
+                        f"defaulting to 'general'"
+                    )
+                content_category_id = 'general'
+            content_category_title = contentcategorydict[content_category_id]
+
             # Load community dict
             dictf = env.get_template('communitydict-extended.json')
             rendered_json_str_f = dictf.render()
@@ -1754,6 +1796,8 @@ class CompoidClient:
                 content_class=content_class,
                 content_class_id=content_class_id,
                 content_class_title=content_class_title,
+                content_category_id=content_category_id,
+                content_category_title=content_category_title,
                 general_weights=general_weights,
                 sensitive_weights=sensitive_weights,
                 proprietary_weights=proprietary_weights,

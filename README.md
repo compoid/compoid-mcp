@@ -21,6 +21,12 @@ This Model Context Protocol (MCP) server provides a secure, remote interface for
 - **Robust Error Handling**: Comprehensive error handling and logging for production use
 - **Async Support**: Full async/await support for high-performance concurrent requests
 
+## 🆕 What's New in v0.1.3
+
+- **Research-domain categorization (`rdm:category`)**: the content-rating VLM now classifies each file's research domain from a 19-category vocabulary (e.g. `artificial-intelligence`, `physics`, `finance-fintech`) and stores it on the record as the `rdm:category` custom field; unknown or missing categories safely fall back to `general`
+- **Category carry-over on updates**: `Compoid_update_record` preserves the record's existing `rdm:category` (off-vocabulary ids fall back to `general`)
+- **Packaging hardening**: template paths now resolve relative to the installed package, so wheel installs work from any working directory
+
 ## 🆕 What's New in v0.1.2
 
 - **Resource-type vocabulary synced with the Compoid platform** (`resource_types_compoid.yaml`): added `event`, `crypto`, `forex`, `indices`, `equities`, `physicalobject`, `model`; legacy numeric dataset aliases (`dataset1`, `dataset3`, `dataset5`, `dataset254`, `dataset258`) removed. Search filters and `Compoid_create_record`/`Compoid_update_record` now accept the full 20-type platform set
@@ -119,7 +125,7 @@ Note: Replace YOUR_API_KEY with your actual Compoid Repository Key.
 
 ### Option 4: Install from PyPI
 
-One-line install (published on [PyPI](https://pypi.org/project/compoid-mcp/), v0.1.2):
+One-line install (published on [PyPI](https://pypi.org/project/compoid-mcp/), v0.1.3):
 
 ```bash
 pip install compoid-mcp
@@ -578,17 +584,17 @@ pip install -e ".[dev]"
 python -m build
 
 # This creates:
-# - dist/compoid_mcp-0.1.2.tar.gz
-# - dist/compoid_mcp-0.1.2-py3-none-any.whl
+# - dist/compoid_mcp-0.1.3.tar.gz
+# - dist/compoid_mcp-0.1.3-py3-none-any.whl
 ```
 
 #### Package Contents Verification
 ```bash
 # Check source distribution contents
-tar -tzf dist/compoid_mcp-0.1.2.tar.gz
+tar -tzf dist/compoid_mcp-0.1.3.tar.gz
 
 # Check wheel contents  
-unzip -l dist/compoid_mcp-0.1.2-py3-none-any.whl
+unzip -l dist/compoid_mcp-0.1.3-py3-none-any.whl
 ```
 For detailed packaging instructions, see [PACKAGING.md](PACKAGING.md).
 
