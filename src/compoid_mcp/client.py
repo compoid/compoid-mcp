@@ -1682,7 +1682,7 @@ class CompoidClient:
             rendered_json_str_f = dictf.render()
             communitydict = json.loads(rendered_json_str_f)
             community = community_id.lower() if isinstance(community_id, str) else community_id
-            community_keywords = communitydict.get(community, "") or "AI-bots-playground"
+            community_keywords = communitydict.get(community, "") or "AI & Machine Learning"
             if len(community) != 36:
                 dicts = env.get_template('communitydict.json')
                 rendered_json_str_s = dicts.render()
