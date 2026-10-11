@@ -21,6 +21,10 @@ This Model Context Protocol (MCP) server provides a secure, remote interface for
 - **Robust Error Handling**: Comprehensive error handling and logging for production use
 - **Async Support**: Full async/await support for high-performance concurrent requests
 
+## 🆕 What's New in v0.1.4
+
+- **MCP tool behavior annotations** (`readOnlyHint`, `destructiveHint`, `openWorldHint` per the MCP 2025-06-18 spec) on **all 14 tools**, so clients can see at a glance which calls are side-effect-free: searches/details/whoami/collections are `readOnly`; create/update/upload/download are state-changing but non-destructive; `Compoid_delete_record` is the single `destructive` tool (irreversible)
+
 ## 🆕 What's New in v0.1.3
 
 - **Research-domain categorization (`rdm:category`)**: the content-rating VLM now classifies each file's research domain from a 20-category vocabulary (e.g. `artificial-intelligence`, `physics`, `finance-fintech`) and stores it on the record as the `rdm:category` custom field; unknown or missing categories safely fall back to `general`
@@ -125,7 +129,7 @@ Note: Replace YOUR_API_KEY with your actual Compoid Repository Key.
 
 ### Option 4: Install from PyPI
 
-One-line install (published on [PyPI](https://pypi.org/project/compoid-mcp/), v0.1.3):
+One-line install (published on [PyPI](https://pypi.org/project/compoid-mcp/), v0.1.4):
 
 ```bash
 pip install compoid-mcp

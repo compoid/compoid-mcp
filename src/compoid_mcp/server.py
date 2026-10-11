@@ -3,7 +3,17 @@
 import os
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 from fastmcp.server.dependencies import get_http_headers
+
+# Behavior annotations (MCP 2025-06-18 spec): hints for clients about tool side
+# effects. Every tool talks to the live Compoid API (openWorldHint=True);
+# read tools declare readOnlyHint, writes declare destructiveHint (False for
+# create/update - they change state but are reversible via new versions; True
+# for delete, which is irreversible).
+READ_ANN = ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=True)
+WRITE_ANN = ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=True)
+DELETE_ANN = ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=True)
 
 from compoid_mcp.client import CompoidClient
 from compoid_mcp.config import config
@@ -80,7 +90,7 @@ def setup_user_keys_from_headers():
         config.set_user_api_keys(repo_key=repo_key, ai_key=ai_key, proxy_token=proxy_token)
 
 
-@mcp.tool(name="Compoid_search_records")
+@mcp.tool(name="Compoid_search_records", annotations=READ_ANN)
 async def Compoid_search_records(
     query: str,
     community_id: str = None,
@@ -126,7 +136,7 @@ async def Compoid_search_records(
         return result[0].text if result else "No results found"
 
 
-@mcp.tool(name="Compoid_search_communities")
+@mcp.tool(name="Compoid_search_communities", annotations=READ_ANN)
 async def Compoid_search_communities(
     query: str,
     title: str = None,
@@ -153,7 +163,7 @@ async def Compoid_search_communities(
         result = await search_communities(client, arguments)
         return result[0].text if result else "No results found"
 
-@mcp.tool(name="Compoid_get_record_details")
+@mcp.tool(name="Compoid_get_record_details", annotations=READ_ANN)
 async def Compoid_get_record_details(work_id: str) -> str:
     """Get detailed information about a specific record by its Compoid ID or OAI."""
     setup_user_keys_from_headers()
@@ -165,7 +175,7 @@ async def Compoid_get_record_details(work_id: str) -> str:
         return result[0].text if result else "record not found"
 
 
-@mcp.tool(name="Compoid_get_community_details")
+@mcp.tool(name="Compoid_get_community_details", annotations=READ_ANN)
 async def Compoid_get_community_details(community_id: str) -> str:
     """Get detailed information about a specific community by its Compoid ID or OAI."""
     setup_user_keys_from_headers()
@@ -177,7 +187,7 @@ async def Compoid_get_community_details(community_id: str) -> str:
         return result[0].text if result else "community not found"
 
 
-@mcp.tool(name="Compoid_download_files")
+@mcp.tool(name="Compoid_download_files", annotations=WRITE_ANN)
 async def Compoid_download_files(
     work_id: str,
     output_path: str = "/",
@@ -198,7 +208,7 @@ async def Compoid_download_files(
         result = await download_paper(client, arguments)
         return result[0].text if result else "Download failed"
 
-@mcp.tool(name="Compoid_upload_file")
+@mcp.tool(name="Compoid_upload_file", annotations=WRITE_ANN)
 async def Compoid_upload_file(
     file_data: str,
     filename: str = None
@@ -213,7 +223,7 @@ async def Compoid_upload_file(
     return result[0].text if result else "Upload failed"
 
 
-@mcp.tool(name="Compoid_create_record")
+@mcp.tool(name="Compoid_create_record", annotations=WRITE_ANN)
 async def Compoid_create_record(
     file_upload: str,
     creators: list[str],
@@ -278,7 +288,7 @@ async def Compoid_create_record(
         result = await create_record(client, arguments)
         return result[0].text if result else "Failed to create record"
 
-@mcp.tool(name="Compoid_whoami")
+@mcp.tool(name="Compoid_whoami", annotations=READ_ANN)
 async def Compoid_whoami() -> str:
     """Identify the user behind the configured Compoid API token (user id, email, home community)."""
     setup_user_keys_from_headers()
@@ -290,7 +300,7 @@ async def Compoid_whoami() -> str:
         return result[0].text if result else "whoami failed"
 
 
-@mcp.tool(name="Compoid_update_record")
+@mcp.tool(name="Compoid_update_record", annotations=WRITE_ANN)
 async def Compoid_update_record(
     work_id: str,
     file_upload: str = None,
@@ -344,7 +354,7 @@ async def Compoid_update_record(
         result = await update_record(client, arguments)
         return result[0].text if result else "Failed to update record"
 
-@mcp.tool(name="Compoid_delete_record")
+@mcp.tool(name="Compoid_delete_record", annotations=DELETE_ANN)
 async def Compoid_delete_record(
     work_id: str
 ) -> str:
@@ -374,7 +384,7 @@ async def Compoid_delete_record(
         result = await delete_record(client, arguments)
         return result[0].text if result else "Failed to delete record"
 
-@mcp.tool(name="Compoid_create_community")
+@mcp.tool(name="Compoid_create_community", annotations=WRITE_ANN)
 async def Compoid_create_community(
     slug: str,
     title: str,
@@ -408,7 +418,7 @@ async def Compoid_create_community(
         return result[0].text if result else "Failed to create community"
 
 
-@mcp.tool(name="Compoid_update_community")
+@mcp.tool(name="Compoid_update_community", annotations=WRITE_ANN)
 async def Compoid_update_community(
     community_id: str,
     slug: str = None,
@@ -444,7 +454,7 @@ async def Compoid_update_community(
         return result[0].text if result else "Failed to update community"
 
 
-@mcp.tool(name="Compoid_search_collections")
+@mcp.tool(name="Compoid_search_collections", annotations=READ_ANN)
 async def Compoid_search_collections(
     community_id: str,
     query: str = None,
@@ -466,7 +476,7 @@ async def Compoid_search_collections(
         return result[0].text if result else "No collections found"
 
 
-@mcp.tool(name="Compoid_get_collection_records")
+@mcp.tool(name="Compoid_get_collection_records", annotations=READ_ANN)
 async def Compoid_get_collection_records(
     collection_id: int,
     query: str = None,
