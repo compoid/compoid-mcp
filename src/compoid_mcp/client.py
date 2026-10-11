@@ -124,6 +124,7 @@ class CompoidClient:
         self._timeout = timeout  # Store original value, use property for dynamic config access
         self._client: Optional[httpx.AsyncClient] = None
         self._rate_limiter = asyncio.Semaphore(config.max_concurrent_requests)
+        self._home_community_slug: Optional[str] = None  # cached whoami() home community slug
 
     def _is_likely_base64(self, text: str) -> bool:
         """Determine if text is likely base64-encoded content rather than a file path.
@@ -373,6 +374,36 @@ class CompoidClient:
                 error_msg = f"Request failed: {str(e)}"
                 logger.error(error_msg)
                 raise Exception(error_msg)
+
+    async def whoami(self) -> Dict[str, Any]:
+        """Identify the user the configured API key belongs to.
+
+        GET /api/whoami returns ``{"id": ..., "email": ..., "home_community": ...}`` where
+        ``home_community`` is ``{"slug": "user-<id>", "id": ..., "url": ..., "visibility": ...}``
+        or ``null`` when the user has no home community.
+
+        Raises:
+            Exception: on HTTP or network failure (same pattern as other GET methods).
+        """
+        return await self._make_request("whoami")
+
+    async def _default_community(self) -> str:
+        """Return the authenticated user's home community slug (cached).
+
+        Calls ``whoami()`` once per client instance and caches the slug so
+        repeated ``create_record`` calls without an explicit ``community_id``
+        don't re-hit the API.
+        """
+        if self._home_community_slug is None:
+            who = await self.whoami()
+            home = who.get("home_community")
+            if not home or not home.get("slug"):
+                raise Exception(
+                    "Error: the current API key has no home community. "
+                    "Pass community_id to set one explicitly."
+                )
+            self._home_community_slug = home["slug"]
+        return self._home_community_slug
 
     async def get_works(
         self,
@@ -729,9 +760,9 @@ class CompoidClient:
 
     async def upload_record(
         self,
-        community_id: str,
         file_upload: str,
         creators: list[str],
+        community_id: Optional[str] = None,
         filter_title: Optional[str] = None,
         filter_description: Optional[str] = None,
         filter_references: list[str] = None,
@@ -740,9 +771,11 @@ class CompoidClient:
         filter_resource_type: list[str] = None
     ) -> Dict[str, Any]:
         """Create or update Compoid record.
-        
+
         Args:
-            community_id: Community ID where to upload the record
+            community_id: Community ID where to upload the record. Optional - when
+                omitted, the authenticated user's home community slug ('user-<id>',
+                resolved once via whoami() and cached) is used instead.
             file_upload: Local file path OR base64-encoded file content from remote client
             creators: List of creators
             filter_title: Record title
@@ -759,6 +792,21 @@ class CompoidClient:
 
         # Handle both local file paths and base64 content from remote clients
         file_path, is_temp_file = self._handle_file_input(file_upload)
+        
+        # Default community: when the caller omits community_id, target the
+        # authenticated user's home community (resolved via whoami, cached).
+        if community_id is None:
+            try:
+                community_id = await self._default_community()
+                logger.info(f"No community_id provided - defaulting to home community '{community_id}'")
+            except Exception as e:
+                error_msg = (
+                    f"Could not determine the default community (whoami lookup failed). "
+                    f"Pass community_id to set one explicitly. "
+                    f"Underlying error: {str(e)}"
+                )
+                logger.error(error_msg)
+                raise ValueError(error_msg)
         
         try:
             mime_type, _ = mimetypes.guess_type(file_path)

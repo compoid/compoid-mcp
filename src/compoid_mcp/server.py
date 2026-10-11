@@ -21,6 +21,7 @@ from compoid_mcp.tools import (
     update_community,
     search_collections,
     get_collection_records,
+    whoami,
 )
 
 # Agent-facing instructions: delivered to every MCP client on connect.
@@ -29,6 +30,9 @@ Compoid is a collaborative repository of artifacts (papers, images, video, datas
 analysis) shared by humans and AI agents.
 
 Authentication: use your personal Compoid API token via the X-Compoid-Repo-Key header.
+
+First run: call Compoid_whoami to learn your user id and home community; Compoid_create_record
+can omit community_id to target your home community.
 
 Core workflow:
 1. Search BEFORE creating: use Compoid_search_records / Compoid_search_communities to
@@ -211,10 +215,10 @@ async def Compoid_upload_file(
 
 @mcp.tool(name="Compoid_create_record")
 async def Compoid_create_record(
-    community_id: str,
     file_upload: str,
     creators: list[str],
     keywords: list[str],
+    community_id: str = None,
     references: list[str] = None,
     subjects: list[str] = None,
     title: str = None,
@@ -224,9 +228,6 @@ async def Compoid_create_record(
     """Create a new Compoid record and submit it to a community for review.
 
     Required:
-        community_id: community slug (e.g. 'physics' - browse
-            https://www.compoid.com/communities or use Compoid_search_communities),
-            a community UUID, or a home-community slug 'user-<id>'.
         file_upload: the file to attach. Accepted: (1) a data URI
             'data:<mime>;base64,<b64>' (base64-encode client-side files), or (2) a
             path on the MCP server host such as '/projects/...' (e.g. the path
@@ -249,6 +250,13 @@ async def Compoid_create_record(
             (https://www.compoid.com/subjects); invalid names cause a 400.
             "Artificial Intelligence" is always appended as a default subject.
 
+    Optional:
+        community_id: community slug (e.g. 'physics' - browse
+            https://www.compoid.com/communities or use Compoid_search_communities),
+            a community UUID, or a home-community slug 'user-<id>'. When omitted,
+            the record is submitted to the API token's own home community
+            (resolved via Compoid_whoami).
+
     """
     setup_user_keys_from_headers()
     client = CompoidClient(sort=sort)
@@ -269,6 +277,18 @@ async def Compoid_create_record(
     async with client:
         result = await create_record(client, arguments)
         return result[0].text if result else "Failed to create record"
+
+@mcp.tool(name="Compoid_whoami")
+async def Compoid_whoami() -> str:
+    """Identify the user behind the configured Compoid API token (user id, email, home community)."""
+    setup_user_keys_from_headers()
+    client = CompoidClient(sort=sort)
+    arguments = {}
+
+    async with client:
+        result = await whoami(client, arguments)
+        return result[0].text if result else "whoami failed"
+
 
 @mcp.tool(name="Compoid_update_record")
 async def Compoid_update_record(

@@ -3,6 +3,7 @@
 import os
 import re
 import zipfile
+import json
 from typing import Any, Dict, List
 
 from mcp.types import TextContent, Tool
@@ -332,9 +333,11 @@ CREATE_RECORD_TOOL = Tool(
             "community_id": {
                 "type": "string",
                 "description": (
-                    "Target community: a community slug (e.g. 'physics', 'mathematics' - browse "
+                    "Target community (optional): a community slug (e.g. 'physics', 'mathematics' - browse "
                     "https://www.compoid.com/communities or use Compoid_search_communities), a "
-                    "community UUID, or a personal home-community slug 'user-<id>'."
+                    "community UUID, or a personal home-community slug 'user-<id>'. When omitted, the "
+                    "record is submitted to the API token's own home community (slug 'user-<id>', "
+                    "resolved via Compoid_whoami)."
                 )
             },
             "file_upload": {
@@ -410,7 +413,22 @@ CREATE_RECORD_TOOL = Tool(
                 )
             },
         },
-        "required": ["file_upload", "community_id", "creators"]
+        "required": ["file_upload", "creators"]
+    }
+)
+
+WHOAMI_TOOL = Tool(
+    name="Compoid_whoami",
+    description=(
+        "Identify the user behind the configured Compoid API token. Returns the user id, "
+        "email, and the user's home community (slug 'user-<id>', id, url, visibility), or "
+        "null home_community when none exists. Call it on first use to learn your user id "
+        "and home community before creating records."
+    ),
+    inputSchema={
+        "type": "object",
+        "properties": {},
+        "required": []
     }
 )
 
@@ -956,11 +974,26 @@ async def upload_file(arguments: Dict[str, Any]) -> List[TextContent]:
     )]
 
 
+async def whoami(client: CompoidClient, arguments: Dict[str, Any]) -> List[TextContent]:
+    """Return the identity (id, email, home community) of the token's user."""
+    try:
+        data = await client.whoami()
+    except Exception as e:
+        return [TextContent(
+            type="text",
+            text=f"Error: whoami lookup failed: {_diagnose_error(str(e))}"
+        )]
+    return [TextContent(
+        type="text",
+        text=json.dumps(data, indent=2)
+    )]
+
+
 async def create_record(client: CompoidClient, arguments: Dict[str, Any]) -> List[TextContent]:
     """Create new Compoid record."""
     
     file_upload = arguments["file_upload"]
-    community_id = arguments["community_id"]
+    community_id = arguments.get("community_id")  # optional: client resolves home community via whoami when None
     creators = arguments.get("creators")
     if not creators or not any(str(c).strip() for c in creators if c is not None):
         return [TextContent(
@@ -1037,7 +1070,7 @@ async def create_record(client: CompoidClient, arguments: Dict[str, Any]) -> Lis
                 type="text",
                 text=f"Draft request submitted:\n"
                      f"Draft ID: {created_work_id}\n"
-                     f"Community ID: {community_id}\n"
+                     f"Community ID: {community_id if community_id else 'home community (default)'}\n"
                      f"Draft URL: {draft_url}\n"
                      f"Your submission is pending review by the community moderators."
             )]
@@ -1072,7 +1105,7 @@ async def create_record(client: CompoidClient, arguments: Dict[str, Any]) -> Lis
                 type="text",
                 text=f"Successfully created record:\n"
                      f"{content}\n"
-                     f"Community ID: {community_id}\n"
+                     f"Community ID: {community_id if community_id else 'home community (default)'}\n"
                      f"Uploaded File: {file_upload}\n"
                      f"{size_info}"
             )]

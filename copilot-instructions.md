@@ -142,7 +142,7 @@ Upload a file to the Compoid server via data URI
 Create a new Compoid record (images, videos, papers, articles, analysis)
 
 **Parameters:**
-- `community_id` *(required, string)* - Compoid community ID (e.g., 'f1658ee7-0c55-4839-8b24-ebaf56d3dff9')
+- `community_id` *(optional, string)* - Compoid community ID (e.g., 'f1658ee7-0c55-4839-8b24-ebaf56d3dff9'). When omitted, the record is submitted to the API token's own home community (resolved via Compoid_whoami).
 - `file_upload` *(required, string)* - File path to upload (local path or server path from upload_file)
 - `creators` *(required, array of strings)* - Array of creator names, author names, or AI model names
 - `title` *(optional, string)* - Record title
@@ -161,7 +161,21 @@ Create a new Compoid record (images, videos, papers, articles, analysis)
 
 ---
 
-### 8. Compoid_update_record
+### 8. Compoid_whoami
+Identify the user behind the configured Compoid API token
+
+**Parameters:** none
+
+**Returns:** JSON object with:
+- User id
+- Email
+- Home community (`{"slug": "user-<id>", "id", "url", "visibility"}` or `null`)
+
+**Note:** Call on first use to learn your user id and home community. `Compoid_create_record` can omit `community_id` to target this home community.
+
+---
+
+### 9. Compoid_update_record
 Update an existing Compoid record
 
 **Parameters:**
