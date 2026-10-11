@@ -23,6 +23,15 @@ class CompoidConfig:
         # mcp-proxy Bearer token — used to authenticate with the upload server
         # Set from the Authorization header on each request by setup_user_keys_from_headers()
         self.proxy_token: Optional[str] = os.getenv("UPLOAD_AUTH_TOKEN")
+
+        # Tier-1 (fail-closed): remember the env-var defaults so per-request
+        # header overrides can always be reconciled back to them.
+        # set_user_api_keys() resets each key to its default when no per-request
+        # value is supplied, so a keyless request can never inherit a previous
+        # caller's key.
+        self._env_repo_api_key: Optional[str] = self.repo_api_key
+        self._env_ai_api_key: Optional[str] = self.ai_api_key
+        self._env_proxy_token: Optional[str] = self.proxy_token
         
         self.timeout: float = float(os.getenv("COMPOID_TIMEOUT", "30.0"))
         self.max_concurrent_requests: int = int(os.getenv("COMPOID_MAX_CONCURRENT", "10"))
@@ -63,12 +72,14 @@ class CompoidConfig:
             ai_key: User-specific AI API key from X-Compoid-AI-Key header
             proxy_token: mcp-proxy Bearer token from Authorization header (used for upload server auth)
         """
-        if repo_key:
-            self.repo_api_key = repo_key
-        if ai_key:
-            self.ai_api_key = ai_key
-        if proxy_token:
-            self.proxy_token = proxy_token
+        # Tier-1 (fail-closed): reset-then-apply. Every request reconciles the
+        # (process-global) config back to its env-var defaults and then applies
+        # the per-request header overrides. A request that supplies no value for
+        # a key resets that key to its default (None when the corresponding env
+        # var is unset), so it can never inherit a previous caller's key.
+        self.repo_api_key = repo_key or self._env_repo_api_key
+        self.ai_api_key = ai_key or self._env_ai_api_key
+        self.proxy_token = proxy_token or self._env_proxy_token
 
     def get_user_agent(self) -> str:
         """Get user agent string for API requests."""

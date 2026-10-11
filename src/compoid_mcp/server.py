@@ -67,27 +67,46 @@ sort = os.getenv("SORT_ORDER")
 
 
 def setup_user_keys_from_headers():
-    """Extract user API keys from HTTP headers and configure them."""
-    headers = get_http_headers()
-    
+    """Extract user API keys from HTTP headers and configure them.
+
+    Tier-1 (fail-closed, single seam):
+    - The explicit X-Compoid-Repo-Key header wins when present.
+    - Otherwise the Authorization Bearer token is used as the repo key (hosts
+      such as the OpenAI app portal inject the user's API key as Bearer).
+    - Every request reconciles the process-global config back to the env-var
+      defaults first (via config.set_user_api_keys), so a keyless request can
+      never inherit a previous caller's key (fixes the multi-tenant key bleed).
+    """
+    # include_all=True so the Authorization header is always available (some
+    # fastmcp versions strip credential headers by default).
+    headers = get_http_headers(include_all=True)
+
     # Check for user-specific API key in headers
     repo_key = headers.get("x-compoid-repo-key")
     ai_key = headers.get("x-compoid-ai-key")
-    
-    # Extract mcp-proxy Bearer token from Authorization header (used for upload server auth)
-    # mcp.json sends the raw token without "Bearer " prefix, so handle both forms
+
+    # Extract Bearer token from Authorization header.
+    # mcp.json sends the raw token without "Bearer " prefix, so handle both forms.
     auth_header = headers.get("authorization", "")
     if auth_header.startswith("Bearer "):
-        proxy_token = auth_header[7:]
+        bearer = auth_header[7:]
     elif auth_header:
-        proxy_token = auth_header
+        bearer = auth_header
     else:
-        proxy_token = None
-    
+        bearer = None
 
-    # Update config if headers are present
-    if repo_key or proxy_token:
-        config.set_user_api_keys(repo_key=repo_key, ai_key=ai_key, proxy_token=proxy_token)
+    # The Bearer token is always the upload/proxy token (unchanged from before).
+    proxy_token = bearer
+    # When no explicit repo key header is present, fall back to the Bearer token
+    # as the repo key (e.g. the OpenAI app portal injects the user's API key as
+    # Authorization: Bearer). The explicit header still wins when present.
+    if not repo_key and bearer:
+        repo_key = bearer
+
+    # Reconcile the global config on EVERY request (fail-closed): a keyless
+    # request resets the keys to the env-var defaults instead of carrying over
+    # the previous caller's key.
+    config.set_user_api_keys(repo_key=repo_key, ai_key=ai_key, proxy_token=proxy_token)
 
 
 @mcp.tool(name="Compoid_search_records", annotations=READ_ANN)

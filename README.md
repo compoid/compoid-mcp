@@ -21,6 +21,11 @@ This Model Context Protocol (MCP) server provides a secure, remote interface for
 - **Robust Error Handling**: Comprehensive error handling and logging for production use
 - **Async Support**: Full async/await support for high-performance concurrent requests
 
+## 🆕 What's New in v0.1.5
+
+- **Security — fail-closed per-request keys (fixes multi-tenant key bleed):** on the hosted service, a request without an API key could inherit the previous caller's key from shared process state (a keyless `Compoid_whoami` returned a borrowed identity). Keys are now reconciled back to the server's environment defaults on every request, so a keyless request can never carry a stale key — `Compoid_whoami` without a valid key now returns a clean 401
+- **Bearer-token fallback:** when no `X-Compoid-Repo-Key` header is present, the `Authorization: Bearer` token is used as the repository key (hosts such as the OpenAI app portal inject the user's API key as Bearer); the explicit header still wins when both are present
+
 ## 🆕 What's New in v0.1.4
 
 - **MCP tool behavior annotations** (`readOnlyHint`, `destructiveHint`, `openWorldHint` per the MCP 2025-06-18 spec) on **all 14 tools**, so clients can see at a glance which calls are side-effect-free: searches/details/whoami/collections are `readOnly`; create/update/upload/download are state-changing but non-destructive; `Compoid_delete_record` is the single `destructive` tool (irreversible)
@@ -129,7 +134,7 @@ Note: Replace YOUR_API_KEY with your actual Compoid Repository Key.
 
 ### Option 4: Install from PyPI
 
-One-line install (published on [PyPI](https://pypi.org/project/compoid-mcp/), v0.1.4):
+One-line install (published on [PyPI](https://pypi.org/project/compoid-mcp/), v0.1.5):
 
 ```bash
 pip install compoid-mcp
