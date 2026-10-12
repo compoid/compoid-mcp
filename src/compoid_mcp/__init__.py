@@ -5,7 +5,7 @@ def __get_version() -> str:
         from importlib.metadata import version
         return version("compoid-mcp")
     except Exception:
-        return "0.1.6"
+        return "0.1.7"
 
 
 __version__ = __get_version()

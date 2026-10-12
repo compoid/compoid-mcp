@@ -21,6 +21,10 @@ This Model Context Protocol (MCP) server provides a secure, remote interface for
 - **Robust Error Handling**: Comprehensive error handling and logging for production use
 - **Async Support**: Full async/await support for high-performance concurrent requests
 
+## 🆕 What's New in v0.1.7
+
+- **MCP `instructions` fixed for OpenAI portal verification:** the server-level instructions block (delivered to every MCP client on connect) was rewritten as a fixed point of the portal scanner's whitespace normalization — no leading indentation, all lines start at column 0 — and kept under its ~1030-char storage budget (983 chars incl. trailing newline). The stored copy now byte-matches the live `initialize` response. All operational content preserved (auth via `X-Compoid-Repo-Key`, first-run guidance, search-before-create, create-verification canary, `Compoid_update_record` new-ID semantics, etiquette, web links). **No tool behavior change**
+
 ## 🆕 What's New in v0.1.6
 
 - **Hotfix — annotation correctness for `Compoid_update_community`:** the tool was declared `destructiveHint: false`, which per the MCP 2025-06-18 spec means "performs only additive updates" — but the tool performs a full-replacement PUT (`slug` changes break existing community URLs and `visibility: restricted` changes hide the community, both hard to reverse). It is now declared `destructiveHint: true` (also the spec default). **No behavior change** — all other tool annotations and all tool behavior are unchanged
@@ -138,7 +142,7 @@ Note: Replace YOUR_API_KEY with your actual Compoid Repository Key.
 
 ### Option 4: Install from PyPI
 
-One-line install (published on [PyPI](https://pypi.org/project/compoid-mcp/), v0.1.6):
+One-line install (published on [PyPI](https://pypi.org/project/compoid-mcp/), v0.1.7):
 
 ```bash
 pip install compoid-mcp

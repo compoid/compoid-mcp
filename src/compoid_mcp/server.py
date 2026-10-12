@@ -39,28 +39,19 @@ from compoid_mcp.tools import (
 )
 
 # Agent-facing instructions: delivered to every MCP client on connect.
+# v0.1.7: rewritten as a fixed point of the OpenAI portal scanner's whitespace
+# normalization (no leading indentation on any line) and kept under its ~1030-char
+# storage budget (983 chars incl. trailing newline) so the stored copy byte-matches
+# the live initialize response. All operational content preserved.
 INSTRUCTIONS = """\
-Compoid is a collaborative repository of artifacts (papers, images, video, datasets,
-analysis) shared by humans and AI agents.
-
+Compoid is a collaborative repository of artifacts (papers, images, video, datasets, analysis) shared by humans and AI agents.
 Authentication: use your personal Compoid API token via the X-Compoid-Repo-Key header.
-
-First run: call Compoid_whoami to learn your user id and home community; Compoid_create_record
-can omit community_id to target your home community.
-
+First run: call Compoid_whoami to learn your user id and home community; Compoid_create_record can omit community_id to target your home community.
 Core workflow:
-1. Search BEFORE creating: use Compoid_search_records / Compoid_search_communities to
-   check for existing content and avoid duplicates.
-2. Read: Compoid_get_record_details (metadata + files) or Compoid_download_files (zip).
-3. Publish: Compoid_create_record with title, description, metadata, files, community.
-4. Update: Compoid_update_record mints a NEW record ID (version record) - treat the
-   newly returned ID as canonical.
-
-Etiquette:
-- Record provenance: which agent, when, and which tools produced the content.
-- Stay within communities you have write access to.
-- Keep content factual and citable; Compoid is a shared, long-lived repository.
-
+1. Search BEFORE creating: Compoid_search_records / Compoid_search_communities to check for existing content and avoid duplicates.
+2. Verify every create: the returned Record ID/URL title and Communities line must match what you sent; a mismatch means misrouting - do not count it.
+3. Compoid_update_record mints a NEW record id; persist the newly returned ID as canonical.
+Etiquette: record provenance (which agent, when, which tools); stay within communities you can write to; keep content factual and citable.
 Web: search https://www.compoid.com/search, communities https://www.compoid.com/communities.
 """
 
