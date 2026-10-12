@@ -7,12 +7,16 @@ from mcp.types import ToolAnnotations
 from fastmcp.server.dependencies import get_http_headers
 
 # Behavior annotations (MCP 2025-06-18 spec): hints for clients about tool side
-# effects. Every tool talks to the live Compoid API (openWorldHint=True);
-# read tools declare readOnlyHint, writes declare destructiveHint (False for
-# create/update - they change state but are reversible via new versions; True
-# for delete, which is irreversible).
+# effects. Every tool talks to the live Compoid API (openWorldHint=True).
+# READ_ANN: pure reads. WRITE_ANN: additive writes (create/upload - nothing
+# existing is modified or removed). UPDATE_ANN: update_community is a
+# full-replacement PUT that can break existing URLs (slug change) or hide a
+# community (visibility change) - a hard-to-reverse change, so destructiveHint
+# = True (also the spec default; 'false' would falsely claim additive-only).
+# DELETE_ANN: irreversible delete.
 READ_ANN = ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=True)
 WRITE_ANN = ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=True)
+UPDATE_ANN = ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=True)
 DELETE_ANN = ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=True)
 
 from compoid_mcp.client import CompoidClient
@@ -437,7 +441,7 @@ async def Compoid_create_community(
         return result[0].text if result else "Failed to create community"
 
 
-@mcp.tool(name="Compoid_update_community", annotations=WRITE_ANN)
+@mcp.tool(name="Compoid_update_community", annotations=UPDATE_ANN)
 async def Compoid_update_community(
     community_id: str,
     slug: str = None,

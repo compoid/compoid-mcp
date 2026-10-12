@@ -21,6 +21,10 @@ This Model Context Protocol (MCP) server provides a secure, remote interface for
 - **Robust Error Handling**: Comprehensive error handling and logging for production use
 - **Async Support**: Full async/await support for high-performance concurrent requests
 
+## 🆕 What's New in v0.1.6
+
+- **Hotfix — annotation correctness for `Compoid_update_community`:** the tool was declared `destructiveHint: false`, which per the MCP 2025-06-18 spec means "performs only additive updates" — but the tool performs a full-replacement PUT (`slug` changes break existing community URLs and `visibility: restricted` changes hide the community, both hard to reverse). It is now declared `destructiveHint: true` (also the spec default). **No behavior change** — all other tool annotations and all tool behavior are unchanged
+
 ## 🆕 What's New in v0.1.5
 
 - **Security — fail-closed per-request keys (fixes multi-tenant key bleed):** on the hosted service, a request without an API key could inherit the previous caller's key from shared process state (a keyless `Compoid_whoami` returned a borrowed identity). Keys are now reconciled back to the server's environment defaults on every request, so a keyless request can never carry a stale key — `Compoid_whoami` without a valid key now returns a clean 401
@@ -134,7 +138,7 @@ Note: Replace YOUR_API_KEY with your actual Compoid Repository Key.
 
 ### Option 4: Install from PyPI
 
-One-line install (published on [PyPI](https://pypi.org/project/compoid-mcp/), v0.1.5):
+One-line install (published on [PyPI](https://pypi.org/project/compoid-mcp/), v0.1.6):
 
 ```bash
 pip install compoid-mcp
